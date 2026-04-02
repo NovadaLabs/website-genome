@@ -191,11 +191,20 @@ STEP 3: EXTRACT — The 8 Dimensions of a Complete Webpage
   ├─────────────────────────────────────────────────────────────────────┤
   │ DIM 6: STATE — all possible states the page can be in             │
   │   Tabs: capture content for EVERY tab, not just the default        │
+  │     → Click each tab. Screenshot. Save HTML. Record the URL.       │
+  │     → Sub-tab URLs are often hidden until you click                │
+  │       (e.g., /overview/res/ has tabs at /consume/, /account/, etc.)│
+  │     → Save tab-urls.json mapping tab names to their actual URLs    │
   │   Dropdowns: capture ALL options and what each selection changes    │
   │   Forms: capture empty state, filled state, error state, success   │
   │   Auth: capture logged-in view + logged-out redirect               │
   │   Save to: specs/states/<page-name>/<state-name>.html              │
   │   Gate: number of states captured >= number of interactive elements │
+  │                                                                     │
+  │   SPA NOTE: React/Vue/Angular apps render inside a deep component  │
+  │   tree. document.querySelector('main') may return empty.            │
+  │   Use document.documentElement.outerHTML for the full page.         │
+  │   Parse offline. Screenshots are the backup when HTML is unusable.  │
   ├─────────────────────────────────────────────────────────────────────┤
   │ DIM 7: NETWORK — every API call the page makes                    │
   │   Open DevTools Network tab or intercept via CDP                   │
@@ -256,6 +265,19 @@ STEP 4: BUILD
   e. Wire interactions (dropdowns, tabs, forms, modals)
 
   GOLDEN RULE: Every pixel traces to observed data. Never invent content.
+
+  SHARED COMPONENT DETECTION (before building pages):
+    Scan all extracted sub-tabs. If multiple pages share identical layouts
+    (e.g., Analytics tab looks the same across 5 products), build ONE shared
+    component and reuse it. This prevents 5 copies of the same pricing page.
+
+  PARALLEL BUILD RULE:
+    If dispatching multiple agents to build pages in parallel:
+    → Agents ONLY write files. They do NOT run npm run build.
+    → Only the orchestrator runs npm run build (prevents race conditions).
+    → An orchestrator that also executes will always cut corners.
+      After hours of strategic work, the instinct is to "just get it done."
+      Fresh agents don't have this fatigue — dispatch them for execution.
 
   Reference (read on demand during build):
     → genome/v1/04-components.md — molecule/organism patterns

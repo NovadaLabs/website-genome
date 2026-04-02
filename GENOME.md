@@ -295,6 +295,20 @@ STEP 5: VERIFY → REFLECT → ACT (loop, max 3 iterations)
       4. If ANY structural mismatch → fix BEFORE continuing to page-level verify
     WHY: Shared components affect every page. A broken navbar = 100 wrong pages.
 
+  DEPTH-FIRST PAGE WALK (for dashboard/app pages — do this BEFORE the checklist):
+    For EACH page in the sidebar, open it on the ORIGINAL site:
+      1. List EVERY clickable element: tabs, buttons, links, dropdowns, forms
+      2. Click/interact with EACH one on the ORIGINAL:
+         - Tab → capture each tab's content
+         - Button → what does it do? API call? Modal? Navigate?
+         - Form → what fields? What happens on submit?
+         - Dropdown → what options? Does selecting change content?
+      3. Now do the SAME on the REPLICA — does each element behave identically?
+      4. If clicking reveals NEW elements (sub-tabs, nested forms), repeat recursively
+      5. Only mark this page "complete" when ALL clickable paths match at ALL depths
+    This is RECURSIVE. Don't stop at the first level.
+    A page with 4 tabs × 3 buttons × 2 forms = 24 paths to verify, not 1.
+
   VERIFY (run all checks):
     □ npm run build passes (zero errors)
     □ Every internal link resolves (zero 404s)
@@ -302,6 +316,7 @@ STEP 5: VERIFY → REFLECT → ACT (loop, max 3 iterations)
     □ Every nav item navigates to correct page
     □ Every dropdown/tab/form works (click each, don't just look)
     □ Dashboard sidebar: every item → working page with content
+    □ Dashboard depth: every sub-tab, form, button within each page works
     □ Content: replica sections >= 60% of original's sections per page
     □ Self-contained: zero links to original product domains
     □ Production server: npx next start (not dev server for verification)
@@ -587,6 +602,13 @@ WHEN TO READ:
     where buttons do nothing is NOT a replica — it's a screenshot.
     Capture API endpoints during extraction (Step 3-APIS).
     Wire proxy routes during build. Verify every Submit button returns real data.
+
+12. VERIFY TO DEPTH, NOT BREADTH
+    "Dashboard has 11 pages" is breadth. "Each page's tabs, forms, buttons, and
+    sub-states all work identically to the original" is depth.
+    Agents consistently pass gates at the shallowest level. This principle says:
+    for every page, click every clickable element. For every sub-state, repeat.
+    Stop only when there are no more unvisited clickable paths.
 ```
 
 ---

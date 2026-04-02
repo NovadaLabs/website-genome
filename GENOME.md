@@ -222,6 +222,29 @@ STEP 3-COMPONENTS: SHARED COMPONENT EXTRACTION
 
   Gate: Do component HTML files + screenshots + structure JSON all exist?
 
+STEP 3-APIS: API ENDPOINT EXTRACTION
+  A replica with dead APIs is a wireframe, not a product. For SaaS dashboards,
+  the API IS the product. This step captures what makes the dashboard WORK.
+
+  For each dashboard/app page:
+    1. Open browser DevTools Network tab (or intercept via bb-browser/CDP)
+    2. Interact: click submit buttons, change dropdowns, submit forms
+    3. For each API call observed:
+       - URL, method, headers, request body
+       - Response status + body (sample)
+       - Which UI element triggered it
+    4. Save to specs/apis.json:
+       [{ page: "/dashboard/scraper-api", trigger: "Submit Request",
+          endpoint: "https://scraperapi.novada.com/search", method: "GET",
+          params: ["engine", "q", "api_key"], response_sample: {...} }]
+    5. Decide replication strategy per endpoint:
+       - PROXY: create /api/ route that calls the real API (needs key)
+       - MOCK: return captured response for offline demos
+       - SKIP: not essential (analytics, tracking)
+
+  Gate: specs/apis.json exists with at least one endpoint per dashboard page?
+  A dashboard page with a "Submit" button that does nothing = extraction failure.
+
 STEP 3.5: HUMAN GATE (conditional)
   Simple site (< 15 pages, no auth-gated areas):
     → SKIP this step. Proceed to Step 4 autonomously.
@@ -449,11 +472,13 @@ HARD GATES (any fail = not done):
   □ Every nav item navigates correctly
   □ Dashboard sidebar: every item → real page (not placeholder)
   □ Logo and hero images are real downloaded files (not text placeholders)
+  □ Dashboard API gate: every "Submit" button returns real data (not empty, not "coming soon")
 
 SOFT GATES (target, may have gaps):
   □ Every <img> = real asset (target: >= 80% of original's image count)
   □ Content depth: >= 60% of original's sections per page
   □ Every dropdown/tab/form functional
+  □ API responses match original format (proxy or mock)
   □ Responsive at 375px + 768px + 1440px
   □ Lighthouse >= 90 (all categories)
 
@@ -556,6 +581,12 @@ WHEN TO READ:
     For each component: trigger on original → trigger on replica → compare.
     "All 108 routes return 200" is a function check, not an appearance check.
     You need BOTH to pass before declaring done.
+
+11. A REPLICA WITH DEAD APIS IS A WIREFRAME
+    For SaaS products, the API IS the product. A dashboard that looks right but
+    where buttons do nothing is NOT a replica — it's a screenshot.
+    Capture API endpoints during extraction (Step 3-APIS).
+    Wire proxy routes during build. Verify every Submit button returns real data.
 ```
 
 ---

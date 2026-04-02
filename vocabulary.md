@@ -101,6 +101,9 @@ API-keys             key list with copy/reveal/delete             capture key fo
 usage-meter          progress bar or chart showing usage/limits   extract numbers + limits
 empty-state          no-data view with message + CTA              capture (often missed — check empty pages)
 onboarding-wizard    multi-step setup flow for new users          navigate each step → capture all
+api-playground       form + submit + code panel + output          intercept API calls, capture endpoint/params/response, code per language
+endpoint-generator   form → generates connection config           capture all dropdown options + code templates per language
+proxy-config         address/port/username/password display       extract all values + code samples for all languages
 ```
 
 ## PAGE TYPE SIGNATURES — "What type of page am I looking at?"

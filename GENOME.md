@@ -86,12 +86,25 @@ SCALING:
 
 ```
 EXTRACTION (for COPY/FIX mode):
-  1. bb-browser        PRIMARY — user's real Chrome, all logins, visible
+  1. bb-browser        PRIMARY — interactive extraction (hover, click, login pages)
      open <url> | snapshot -i | eval "js" | click @ref | hover @ref | close
-  2. Chrome CDP        BACKUP — batch extraction, ~/Projects/novada-replicate/
-  3. Chrome DevTools    BACKUP — quick checks, separate profile
-  4. Playwright         BACKUP — public pages only, headless
-  5. gstack            QA — responsive testing at 375/768/1440
+     Best for: dropdowns, tabs, modals, auth-gated pages, component capture
+  2. site-crawler      BULK — automated crawl + extraction (100+ pages in one command)
+     site-crawler <url> --output specs/ --max-pages 200
+     Best for: crawling entire sites, downloading all assets, generating manifest
+     Output: per-page HTML + CSS + Markdown + screenshot + metadata + _assets/
+     Repo: NovadaLabs/site-crawler | Install: pip install -e .
+  3. Chrome CDP        BACKUP — programmatic batch extraction
+  4. Chrome DevTools    BACKUP — quick checks, separate profile
+  5. Playwright         BACKUP — public pages only, headless
+  6. gstack            QA — responsive testing at 375/768/1440
+
+TOOL SELECTION:
+  Crawl 100+ pages automatically?     → site-crawler (Step 2)
+  Capture dropdowns/tabs/modals?      → bb-browser (Step 3-COMPONENTS)
+  Auth-gated dashboard pages?         → bb-browser (needs user's Chrome)
+  Download all images/fonts/CSS?      → site-crawler (automated)
+  Responsive QA testing?              → gstack
 
 BUILD:
   Next.js 16 + shadcn/ui + Tailwind 4 + Geist + Vercel
@@ -118,26 +131,39 @@ STEP 1: CONNECT
   Gate:   Can you see the page? Auth-gated pages accessible?
           → If not: ask human to log in, then retry
 
-STEP 2: CRAWL
-  Action: Collect every URL on the site (links, sidebar, footer, subdomains)
-          bb-browser eval "[...document.querySelectorAll('a[href]')].map(a=>a.href)"
-          Classify: INTERNAL (replicate) / PRODUCT-SUBDOMAIN (replicate) / EXTERNAL (keep)
-  Output: specs/sitemap.json
+STEP 2: CRAWL + BULK EXTRACT
+  OPTION A — site-crawler (recommended for 10+ pages):
+    site-crawler <url> --output specs/public --max-pages 200
+    → Automatically crawls all pages, downloads per-page: HTML, CSS, Markdown, screenshot, metadata
+    → Downloads all assets to specs/public/_assets/ (images, fonts, CSS, JS)
+    → Generates manifest.json (structured sitemap)
+    → For auth-gated pages: site-crawler <url> --browser-profile ./profile --output specs/dashboard
+
+  OPTION B — bb-browser (for small sites or when site-crawler unavailable):
+    bb-browser eval "[...document.querySelectorAll('a[href]')].map(a=>a.href)"
+    Classify: INTERNAL (replicate) / PRODUCT-SUBDOMAIN (replicate) / EXTERNAL (keep)
+
+  Output: specs/sitemap.json (or specs/public/manifest.json from site-crawler)
   Gate:   Total URLs discovered >= what you see in the navigation?
 
-STEP 3: EXTRACT — for every page in sitemap
-  For each page:
+STEP 3: INTERACTIVE EXTRACT — what site-crawler misses
+  site-crawler captures static page state. This step captures what it can't:
+  hover states, dropdowns, tabs, modals, form states.
+
+  For each page with interactive elements:
     a. bb-browser open <url>
        → Scroll full page before capturing (modern sites lazy-load below-fold content)
        → bb-browser eval "window.scrollTo(0, document.body.scrollHeight)" then wait 1s
     b. bb-browser snapshot -i → a11y tree (structure, roles, text)
-    c. bb-browser screenshot → save to specs/screenshots/<page-name>.png
-    d. bb-browser eval "document.documentElement.outerHTML" → save to specs/html/<page-name>.html
+    c. bb-browser screenshot → save to specs/screenshots/<page-name>.png (if not already from site-crawler)
+    d. bb-browser eval "document.documentElement.outerHTML" → save to specs/html/<page-name>.html (if not already)
     e. bb-browser eval "<css-extraction-script>" → design tokens
     f. For interactive elements: hover/click → capture changed state
-    g. Collect all <img> src URLs → download to specs/assets/
-    h. Extract @font-face rules → download font files to specs/assets/fonts/
+    g. Extract @font-face rules → download font files to specs/assets/fonts/
        → If fonts are custom/proprietary and unavailable, document the substitution
+
+  If site-crawler already ran: focus this step ONLY on interactive captures (dropdowns, tabs, modals).
+  The static HTML/CSS/assets are already in specs/public/.
 
   For sites with many blog posts:
     → Extract titles/dates/images for listing page

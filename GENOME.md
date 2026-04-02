@@ -131,119 +131,105 @@ STEP 1: CONNECT
   Gate:   Can you see the page? Auth-gated pages accessible?
           → If not: ask human to log in, then retry
 
-STEP 2: CRAWL + BULK EXTRACT
-  OPTION A — site-crawler (recommended for 10+ pages):
+STEP 2: DISCOVER ALL PAGES
+  Use site-crawler (bulk) + bb-browser (auth-gated) to find every URL:
     site-crawler <url> --output specs/public --max-pages 200
-    → Automatically crawls all pages, downloads per-page: HTML, CSS, Markdown, screenshot, metadata
-    → Downloads all assets to specs/public/_assets/ (images, fonts, CSS, JS)
-    → Generates manifest.json (structured sitemap)
-    → For auth-gated pages: site-crawler <url> --browser-profile ./profile --output specs/dashboard
+    bb-browser: navigate sidebar, click every link, collect all paths
+  Classify: INTERNAL (replicate) / PRODUCT-SUBDOMAIN (replicate) / EXTERNAL (keep)
+  Auth-gated pages (dashboard) come FIRST — they are the product.
+  Output: specs/sitemap.json
+  Gate: total discovered >= what you see in navigation?
 
-  OPTION B — bb-browser (for small sites or when site-crawler unavailable):
-    bb-browser eval "[...document.querySelectorAll('a[href]')].map(a=>a.href)"
-    Classify: INTERNAL (replicate) / PRODUCT-SUBDOMAIN (replicate) / EXTERNAL (keep)
+STEP 3: EXTRACT — The 8 Dimensions of a Complete Webpage
 
-  Output: specs/sitemap.json (or specs/public/manifest.json from site-crawler)
-  Gate:   Total URLs discovered >= what you see in the navigation?
+  REPLICATION QUALITY = EXTRACTION QUALITY.
+  If you extract 100% of a page, replication is mechanical.
+  If you extract 70%, you guess the other 30%, and the human catches it.
+  Every failure in our history traces to incomplete extraction, not bad code.
 
-STEP 3: INTERACTIVE EXTRACT — what site-crawler misses
-  site-crawler captures static page state. This step captures what it can't:
-  hover states, dropdowns, tabs, modals, form states.
+  A webpage is made of exactly 8 things. For EVERY page in the sitemap,
+  capture ALL 8. A page missing ANY dimension is an incomplete extraction.
 
-  For each page with interactive elements:
-    a. bb-browser open <url>
-       → Scroll full page before capturing (modern sites lazy-load below-fold content)
-       → bb-browser eval "window.scrollTo(0, document.body.scrollHeight)" then wait 1s
-    b. bb-browser snapshot -i → a11y tree (structure, roles, text)
-    c. bb-browser screenshot → save to specs/screenshots/<page-name>.png (if not already from site-crawler)
-    d. bb-browser eval "document.documentElement.outerHTML" → save to specs/html/<page-name>.html (if not already)
-    e. bb-browser eval "<css-extraction-script>" → design tokens
-    f. For interactive elements: hover/click → capture changed state
-    g. Extract @font-face rules → download font files to specs/assets/fonts/
-       → If fonts are custom/proprietary and unavailable, document the substitution
+  ┌─────────────────────────────────────────────────────────────────────┐
+  │ DIM 1: STRUCTURE — the HTML DOM tree                              │
+  │   bb-browser eval "document.documentElement.outerHTML"             │
+  │   Save to: specs/html/<page-name>.html                            │
+  │   Contains: every element, every attribute, every text node        │
+  │   This is the PRIMARY source for rebuilding the page.              │
+  ├─────────────────────────────────────────────────────────────────────┤
+  │ DIM 2: STYLE — computed CSS for every element                     │
+  │   site-crawler saves styles.css per page automatically             │
+  │   Also extract design tokens (colors, fonts, spacing, radius):     │
+  │     Colors: getComputedStyle → backgroundColor, color, borderColor │
+  │     Fonts: getComputedStyle → fontFamily (+ download @font-face)   │
+  │   Save to: specs/design-tokens.json + specs/css/<page-name>.css    │
+  ├─────────────────────────────────────────────────────────────────────┤
+  │ DIM 3: ASSETS — every file the page references                    │
+  │   Images: all <img> src URLs → download to specs/assets/images/    │
+  │   Fonts: all @font-face URLs → download to specs/assets/fonts/     │
+  │   SVGs: all inline <svg> elements → save to specs/assets/svgs/     │
+  │   Icons: all icon references → download or extract                 │
+  │   Gate: 0 placeholder images. Every <img> = real downloaded file.  │
+  ├─────────────────────────────────────────────────────────────────────┤
+  │ DIM 4: CONTENT — every text string, verbatim                      │
+  │   site-crawler saves page.md (clean Markdown) per page             │
+  │   For blog posts: save FULL article HTML, don't summarize          │
+  │   For data pages: save all visible numbers, labels, table data     │
+  │   Rule: every text in the replica comes from extraction, not AI    │
+  ├─────────────────────────────────────────────────────────────────────┤
+  │ DIM 5: BEHAVIOR — what happens when you interact                  │
+  │   For EVERY clickable element on EVERY page:                       │
+  │     Click it. What happens? Record:                                │
+  │     - Tab → content changes (capture each tab's content)           │
+  │     - Button → API call / modal / navigation (capture result)      │
+  │     - Dropdown → options list + what changes (capture each option) │
+  │     - Hover → reveal / color change / tooltip (capture state)      │
+  │     - Form → fields + validation + submit result (capture all)     │
+  │   This is RECURSIVE: if clicking reveals new elements, click those │
+  │   Save to: specs/interactions.json                                 │
+  │   Gate: every clickable element documented with its result         │
+  ├─────────────────────────────────────────────────────────────────────┤
+  │ DIM 6: STATE — all possible states the page can be in             │
+  │   Tabs: capture content for EVERY tab, not just the default        │
+  │   Dropdowns: capture ALL options and what each selection changes    │
+  │   Forms: capture empty state, filled state, error state, success   │
+  │   Auth: capture logged-in view + logged-out redirect               │
+  │   Save to: specs/states/<page-name>/<state-name>.html              │
+  │   Gate: number of states captured >= number of interactive elements │
+  ├─────────────────────────────────────────────────────────────────────┤
+  │ DIM 7: NETWORK — every API call the page makes                    │
+  │   Open DevTools Network tab or intercept via CDP                   │
+  │   Interact with the page: click buttons, submit forms              │
+  │   For each API call: URL, method, headers, request, response       │
+  │   Save to: specs/apis.json                                        │
+  │   Strategy per endpoint: PROXY (real API) / MOCK (saved response)  │
+  │   Gate: every Submit button has a captured API endpoint             │
+  ├─────────────────────────────────────────────────────────────────────┤
+  │ DIM 8: METADATA — everything invisible but essential              │
+  │   <title>, <meta description>, OG tags, JSON-LD                    │
+  │   site-crawler saves metadata.json per page automatically          │
+  │   Save to: specs/metadata/<page-name>.json                         │
+  └─────────────────────────────────────────────────────────────────────┘
 
-  If site-crawler already ran: focus this step ONLY on interactive captures (dropdowns, tabs, modals).
-  The static HTML/CSS/assets are already in specs/public/.
+  SHARED COMPONENTS (navbar, footer, hero):
+    These appear on EVERY page. Extract them separately as visual units:
+    → Screenshot + outerHTML + structure (columns, items, sub-links)
+    → Navbar dropdowns: hover each → capture each dropdown state
+    → Save to: specs/components/
 
-  For sites with many blog posts:
-    → Extract titles/dates/images for listing page
-    → Save full HTML per post (building blog content from scratch is unreliable)
+  COMPLETENESS CHECK (after extracting a page):
+    □ HTML saved?  □ CSS saved?  □ Assets downloaded?  □ Content captured?
+    □ Every click documented?  □ All states visited?  □ APIs intercepted?  □ Metadata saved?
+    If ANY box is unchecked → the page extraction is INCOMPLETE.
+    Incomplete extraction → incomplete replica → human catches it → wasted time.
 
-  Output: specs/design-tokens.json, specs/interactions.json, specs/assets-needed.json
-  Gate:   Do spec files exist? Are assets downloaded?
-          → NO SPEC FILES = NO CODE. This is the extraction product, not overhead.
+  TOOLS:
+    site-crawler: bulk extraction (HTML, CSS, Markdown, screenshots, assets per page)
+    bb-browser: interactive extraction (hover, click, forms, auth-gated pages)
+    Use BOTH: site-crawler for the static 8 dimensions, bb-browser for behavior + state.
 
-  SPEC FILE SHAPES:
-    specs/sitemap.json:        [{ path, template, auth, sub_tabs? }]
-    specs/design-tokens.json:  { colors: { primary, bg, fg, ... }, fonts: { sans, mono }, spacing: { base: 4 }, radius: "0.5rem" }
-    specs/interactions.json:   [{ element, trigger, action, target }]
-    specs/assets-needed.json:  { images: [{ name, src, used_on }], fonts: [...], icons: [...] }
-
-  CSS EXTRACTION SCRIPTS (for step 3d):
-    Colors: bb-browser eval "(() => { const s=new Set(); document.querySelectorAll('*').forEach(e=>{const c=getComputedStyle(e);[c.backgroundColor,c.color,c.borderColor].forEach(v=>s.add(v))});return[...s].filter(c=>c!='rgba(0, 0, 0, 0)')})()"
-    Fonts:  bb-browser eval "(() => { const s=new Set(); document.querySelectorAll('*').forEach(e=>s.add(getComputedStyle(e).fontFamily));return[...s]})()"
-    Links:  bb-browser eval "[...new Set([...document.querySelectorAll('a[href]')].map(a=>a.href).filter(h=>h.startsWith(location.origin)).map(h=>new URL(h).pathname))].sort()"
-
-  DASHBOARD RULE (if auth-gated pages exist):
-    This is STEP 3, not STEP 10. Explore dashboard FIRST.
-    → Click EVERY sidebar item → capture each sub-page
-    → Click EVERY tab within each page → capture each tab
-    → Count: sidebar items = N → you need N routes in the replica
-    Three agents skipped this. Don't be the fourth.
-
-STEP 3-COMPONENTS: SHARED COMPONENT EXTRACTION
-  Shared components appear on EVERY page. Getting them wrong = every page is wrong.
-  Extract them as COMPLETE VISUAL UNITS, not just link lists.
-
-  NAVBAR:
-    For each top-level nav item that has a dropdown:
-      a. Hover the item → wait for dropdown to fully appear
-      b. Screenshot the dropdown → specs/screenshots/nav-{item-name}.png
-      c. Extract dropdown outerHTML → specs/components/nav-{item-name}.html
-      d. Record structure:
-         - Column count, section headers (exact text), items per section
-         - Item structure: icon + title + subtitle + badge + sub-links
-         - Background color, positioning (full-width vs floating)
-      e. Save to specs/nav-structure.json
-
-  FOOTER:
-    a. Screenshot → specs/screenshots/footer.png
-    b. Extract outerHTML → specs/components/footer.html
-    c. Record: column count, section titles, link count per section
-
-  HERO (homepage):
-    a. Screenshot → specs/screenshots/hero.png
-    b. Extract outerHTML → specs/components/hero.html
-    c. Record: background, headline, subtitle, CTAs, trust badges
-
-  RULE: A mega-menu is a COMPONENT, not a link list.
-  Extract it as you would extract a page section — with HTML, screenshot, and structure.
-  Output: specs/nav-structure.json, specs/components/
-
-  Gate: Do component HTML files + screenshots + structure JSON all exist?
-
-STEP 3-APIS: API ENDPOINT EXTRACTION
-  A replica with dead APIs is a wireframe, not a product. For SaaS dashboards,
-  the API IS the product. This step captures what makes the dashboard WORK.
-
-  For each dashboard/app page:
-    1. Open browser DevTools Network tab (or intercept via bb-browser/CDP)
-    2. Interact: click submit buttons, change dropdowns, submit forms
-    3. For each API call observed:
-       - URL, method, headers, request body
-       - Response status + body (sample)
-       - Which UI element triggered it
-    4. Save to specs/apis.json:
-       [{ page: "/dashboard/scraper-api", trigger: "Submit Request",
-          endpoint: "https://scraperapi.novada.com/search", method: "GET",
-          params: ["engine", "q", "api_key"], response_sample: {...} }]
-    5. Decide replication strategy per endpoint:
-       - PROXY: create /api/ route that calls the real API (needs key)
-       - MOCK: return captured response for offline demos
-       - SKIP: not essential (analytics, tracking)
-
-  Gate: specs/apis.json exists with at least one endpoint per dashboard page?
-  A dashboard page with a "Submit" button that does nothing = extraction failure.
+  OUTPUT: specs/ folder with all 8 dimensions for every page.
+  GATE: NO CODE UNTIL SPECS ARE COMPLETE. The specs ARE the product of extraction.
 
 STEP 3.5: HUMAN GATE (conditional)
   Simple site (< 15 pages, no auth-gated areas):
@@ -551,64 +537,45 @@ WHEN TO READ:
 
 ---
 
-## PRINCIPLES (burned into this OS from 3 failed replications)
+## PRINCIPLES
 
 ```
-1. EXTRACT > IMAGINE
-   Every pixel traces to observed data. Agent creativity is the enemy in COPY mode.
+THE CORE TRUTH:
+  Replication quality = extraction quality. Period.
+  If you extract 100% of a page's data, replication is mechanical.
+  If you extract 70%, you guess 30%, and the human catches it every time.
+  Every failure traces to incomplete extraction, not bad code.
 
-2. SPECS BEFORE CODE
-   No React until sitemap.json + design-tokens.json + interactions.json exist.
+1. EXTRACTION IS THE PRODUCT
+   The specs/ folder is what matters, not the code. Code is assembly.
+   Spend 70% of time on extraction, 30% on build.
+   A complete extraction makes build trivial. An incomplete one makes it impossible.
 
-3. DASHBOARD FIRST
+2. 8 DIMENSIONS, ALL REQUIRED
+   Structure + Style + Assets + Content + Behavior + State + Network + Metadata.
+   A page missing ANY dimension is incomplete. Check the 8-box list for every page.
+
+3. RECURSIVE DEPTH
+   For every page: click every clickable element. For every result: repeat.
+   A page with 4 tabs × 3 buttons × 2 forms = 24 paths to capture, not 1.
+   "I visited the page" ≠ "I explored all its states."
+
+4. DASHBOARD FIRST
    Auth-gated pages are the product. Marketing pages are the wrapper.
-   → See §COPY Step 3 DASHBOARD RULE for the full protocol.
+   Extract the dashboard BEFORE marketing pages — it has the most depth.
 
-4. ASSETS > CODE
-   Downloading 61 real images was the single biggest quality jump.
-   Replace code-level placeholders with real downloaded files.
+5. COMPARE BOTH SITES, ALWAYS
+   Never evaluate the replica alone. Open original + replica side by side.
+   For every element: trigger on original → trigger on replica → match?
 
-5. VERIFY THEN REPORT
-   Run the full gate checklist. Fix failures. Only then tell the human.
-   "52 pages, 0 broken links, all dropdowns verified" — not "looks good."
+6. QUALITY SYSTEM, NOT CHECKLIST
+   "I did something" ≠ "I did it completely."
+   Agents optimize for gate-passing, not quality. Fight this instinct.
+   For each step: is the artifact COMPLETE across all 8 dimensions?
 
-6. CLICK, DON'T SCREENSHOT
-   Screenshots test rendering. Clicking tests behavior.
-   A dashboard that looks right in a screenshot but has broken nav = failure.
-
-7. PRODUCTION BUILD FOR VERIFICATION
-   npm run build && npx next start. Dev server is unreliable for QA.
-
-8. QUALITY SYSTEM, NOT CHECKLIST
-   "I extracted something" ≠ "I extracted everything the step specifies."
-   For each step: did you produce the EXACT artifact? Is it COMPLETE?
-   Every line in this file exists because an agent failed without it.
-   If you're thinking "close enough, moving on" — you are failing.
-
-9. MEGA-MENUS ARE COMPONENTS, NOT LINK LISTS
-   A dropdown with 3 columns, section headers, icons, and sub-links
-   cannot be reconstructed from a flat list of URLs.
-   Extract the dropdown's outerHTML, screenshot, and structure.
-   The navbar appears on EVERY page — getting it wrong multiplies across the entire replica.
-
-10. COMPARE BOTH SITES FOR EVERY CHECK
-    Never evaluate the replica in isolation. Open original and replica side by side.
-    For each component: trigger on original → trigger on replica → compare.
-    "All 108 routes return 200" is a function check, not an appearance check.
-    You need BOTH to pass before declaring done.
-
-11. A REPLICA WITH DEAD APIS IS A WIREFRAME
-    For SaaS products, the API IS the product. A dashboard that looks right but
-    where buttons do nothing is NOT a replica — it's a screenshot.
-    Capture API endpoints during extraction (Step 3-APIS).
-    Wire proxy routes during build. Verify every Submit button returns real data.
-
-12. VERIFY TO DEPTH, NOT BREADTH
-    "Dashboard has 11 pages" is breadth. "Each page's tabs, forms, buttons, and
-    sub-states all work identically to the original" is depth.
-    Agents consistently pass gates at the shallowest level. This principle says:
-    for every page, click every clickable element. For every sub-state, repeat.
-    Stop only when there are no more unvisited clickable paths.
+7. VERIFY WITH PRODUCTION BUILD
+   npm run build && npx next start. Dev server is unreliable.
+   Click every interactive element. Report with numbers, not feelings.
 ```
 
 ---

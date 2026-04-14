@@ -9,7 +9,7 @@
 
 ```checklist
 [ ] bb-browser open <target-url> — does it open in user's Chrome?
-    → If bb-browser not working: fallback to CDP (human runs: cd ~/Projects/novada-replicate && npm run launch-chrome)
+    → If bb-browser not working: fallback to CDP (human runs: cd ~/Projects/agent-chrome-bridge && npm run launch-chrome)
 [ ] Navigate to target site's LOGIN page — is human's session active?
 [ ] If auth-gated pages exist: bb-browser open <dashboard-url> RIGHT NOW
     → Can you see logged-in content? If yes, capture FULL structure immediately

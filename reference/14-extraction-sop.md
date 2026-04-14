@@ -66,11 +66,11 @@ METHOD 1: BB-BROWSER (recommended — uses user's real Chrome with login)
 
 METHOD 2: CHROME CDP PIPELINE (backup — when bb-browser unavailable)
   HOW: Copies cookies from human's real Chrome profile to a temp dir, launches via CDP
-  CODE: ~/Projects/novada-replicate/tools/chrome-cdp.ts
+  CODE: ~/Projects/agent-chrome-bridge/tools/chrome-cdp.ts
   AUTH: Uses human's existing Chrome login sessions (no re-login needed)
 
   SETUP:
-    cd ~/Projects/novada-replicate
+    cd ~/Projects/agent-chrome-bridge
     npm run launch-chrome     # launches Chrome with copied cookies on port 9222
     # Then in agent code:
     const browser = await pw.chromium.connectOverCDP('http://127.0.0.1:9222')
@@ -160,7 +160,7 @@ PROCESS:
 
   0.3 For CDP pipeline (Method 2):
       a. Human ensures they are logged in to target site in their normal Chrome
-      b. Agent runs: cd ~/Projects/novada-replicate && npm run launch-chrome
+      b. Agent runs: cd ~/Projects/agent-chrome-bridge && npm run launch-chrome
       c. Agent runs: npm run cdp <target-url>
       d. Verify login session carried over (check for auth-gated content)
 
@@ -692,7 +692,7 @@ BB-BROWSER (PRIMARY — user's real Chrome with login):
     bb-browser eval "[...document.querySelectorAll('a[href]')].map(a=>({text:a.textContent.trim(),href:a.href})).filter(l=>l.text)"
 
 CHROME CDP PIPELINE (BACKUP — programmatic batch extraction):
-  cd ~/Projects/novada-replicate
+  cd ~/Projects/agent-chrome-bridge
   npm run launch-chrome      → launch Chrome with copied cookies on port 9222
   npm run cdp <url>          → capture page (screenshot + DOM + styles)
   npm run cdp-batch <urls>   → batch capture multiple pages
@@ -851,8 +851,8 @@ Pixel diff target: >= 90% of pages at PASS (≥95% match), rest at WARN (80-95%)
 ```spec
 For complex extraction scenarios, consult:
   SOP v3:        ~/Projects/novada-web/sop/website-replication-sop-v3.md
-  CDP pipeline:  ~/Projects/novada-replicate/tools/chrome-cdp.ts
-  Pixel diff:    ~/Projects/novada-replicate/tools/pixel-diff.ts
+  CDP pipeline:  ~/Projects/agent-chrome-bridge/tools/chrome-cdp.ts
+  Pixel diff:    ~/Projects/agent-chrome-bridge/tools/pixel-diff.ts
 
 These contain battle-tested patterns from real extraction runs (Tavily, Bright Data).
 The genome's extraction process above is the GENERALIZED version.

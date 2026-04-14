@@ -120,7 +120,7 @@ STEP 1: Log into the target website in your NORMAL Chrome
 STEP 2: Run the CDP launcher (ONE command)
   → Open your terminal and run:
 
-    cd ~/Projects/novada-replicate && npm run launch-chrome
+    cd ~/Projects/agent-chrome-bridge && npm run launch-chrome
 
   → What this does:
     1. Closes your current Chrome
@@ -154,12 +154,12 @@ STEP 4: Tell the agent to start
 
 ```bash
 # First time setup (one-time)
-# novada-replicate is a separate tool from site-crawler — clone it directly:
-git clone https://github.com/NovadaLabs/novada-replicate ~/Projects/novada-replicate
-cd ~/Projects/novada-replicate && npm install
+# agent-chrome-bridge is a separate tool from site-crawler — clone it directly:
+git clone https://github.com/NovadaLabs/agent-chrome-bridge ~/Projects/agent-chrome-bridge
+cd ~/Projects/agent-chrome-bridge && npm install
 
 # Then every time you need it:
-cd ~/Projects/novada-replicate && npm run launch-chrome
+cd ~/Projects/agent-chrome-bridge && npm run launch-chrome
 ```
 
 **Only replicating public pages (no login needed)?**
@@ -235,7 +235,7 @@ Agent(subagent_type="website-builder", prompt="replicate https://example.com")
 
 ```
 # 1. Human launches Chrome with login sessions (the ONLY manual step)
-cd ~/Projects/novada-replicate && npm run launch-chrome
+cd ~/Projects/agent-chrome-bridge && npm run launch-chrome
 
 # 2. Agent takes over
 "Replicate https://example.com — follow the website-genome skill"

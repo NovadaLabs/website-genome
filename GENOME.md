@@ -17,12 +17,12 @@ FIRST QUESTION: Does the target site have auth-gated pages (dashboard, settings,
   YES → Chrome is required. Do not skip this.
 
 CHROME SETUP (auth-gated sites only — one command per session):
-  Human runs: cd ~/Projects/novada-replicate && npm run launch-chrome
+  Human runs: cd ~/Projects/agent-chrome-bridge && npm run launch-chrome
   What this does: copies your login sessions → relaunches Chrome on port 9222.
 
   Agent verifies: bb-browser open <any-url> — does it connect?
   → YES → proceed to LAYER 0
-  → NO  → STOP. Tell human: "Please run: cd ~/Projects/novada-replicate && npm run launch-chrome"
+  → NO  → STOP. Tell human: "Please run: cd ~/Projects/agent-chrome-bridge && npm run launch-chrome"
            Do not proceed until confirmed.
 
   RULE: bb-browser = your Chrome's login sessions. No alternative for auth-gated pages.
@@ -62,7 +62,7 @@ EXTRACTION DECISION TREE:
   ├── YES → site-crawler + Playwright (no Chrome needed)
   └── NO (has auth-gated pages)
        ├── bb-browser connected? → bb-browser (primary)
-       └── bb-browser down?     → CDP via novada-replicate
+       └── bb-browser down?     → CDP via agent-chrome-bridge
 
 TOOL REFERENCE:
   bb-browser      open <url> | snapshot -i | eval "js" | click @ref | hover @ref | close
@@ -75,7 +75,7 @@ TOOL REFERENCE:
 
   Playwright      Headless. Public pages only. No login state.
 
-  CDP (novada-replicate)  npm run launch-chrome → Chrome on port 9222
+  CDP (agent-chrome-bridge)  npm run launch-chrome → Chrome on port 9222
                           Backup when bb-browser can't connect.
 
   gstack          Responsive QA at 375 / 768 / 1440px

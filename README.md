@@ -154,7 +154,8 @@ STEP 4: Tell the agent to start
 
 ```bash
 # First time setup (one-time)
-git clone https://github.com/NovadaLabs/site-crawler ~/Projects/novada-replicate
+# novada-replicate is a separate tool from site-crawler — clone it directly:
+git clone https://github.com/NovadaLabs/novada-replicate ~/Projects/novada-replicate
 cd ~/Projects/novada-replicate && npm install
 
 # Then every time you need it:

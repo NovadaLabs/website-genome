@@ -32,6 +32,28 @@ STEP 0: Read the human's project-checklist.md
   Location: human-setup/project-checklist.md (filled by human)
   Extract: brand name, website type, features, env vars, repo info
 
+STEP 0.5: Research references (5 minutes — do NOT skip)
+  → Read: 21-ui-ux-design.md#reference-database for the full reference list
+
+  1. Identify the website category: API platform / SaaS / marketing / e-commerce / docs
+  2. Open 2-3 reference sites from 21-ui-ux-design.md that match this category
+  3. Screenshot their key pages: hero, pricing, dashboard, auth
+  4. Note the patterns that make them feel premium:
+       - Typography scale (what sizes for heading/body/caption?)
+       - Card treatment (border style, radius, hover effect)
+       - Color usage (muted, accent, surfaces)
+       - Spacing rhythm (section gaps, card padding)
+  5. Keep these references open in background tabs throughout the build
+
+  REFERENCE SITES BY CATEGORY:
+    API platform:    fal.ai, Replicate, Supabase
+    SaaS dashboard:  Linear, Vercel Analytics, Railway
+    Marketing site:  Vercel, Resend, Clerk
+    Auth pages:      Clerk, Supabase Auth, Railway
+    Docs:            Stripe Docs, Mintlify, Radix UI
+
+  NOTE: Do NOT copy reference CSS. Understand the principle, then apply it to our stack.
+
 STEP 1: Scaffold
   npx create-next-app@latest [project-name] --typescript --tailwind --eslint --app --src-dir --turbopack --import-alias "@/*"
   cd [project-name]

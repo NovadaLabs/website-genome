@@ -159,7 +159,24 @@ H06: ☐ Status conveyed via text, not just color
 H07: ☐ Descriptive link text (no "click here")
 ```
 
-### I. CODE QUALITY (6 checks)
+### I. VISUAL QUALITY (9 checks)
+
+```spec
+TOOL: Open the live URL in Chrome. Check both light and dark mode.
+Compare against a reference site (→ 21-ui-ux-design.md#reference-database) if available.
+
+I01: ☐ No hardcoded hex colors visible in light mode (no dark panels on light bg)
+I02: ☐ Borders visible in both light and dark mode (no invisible borders)
+I03: ☐ Typography hierarchy clear: 4 levels max, no two elements same size+weight
+I04: ☐ Cards consistent across all pages (same radius, border, shadow treatment)
+I05: ☐ Buttons have hover AND active states — no 150ms+ perceived click lag
+I06: ☐ Empty states have icon + message + CTA (not raw "No data" text)
+I07: ☐ Loading states use skeleton shapes, not spinner-only
+I08: ☐ Light mode checked: page readable, no invisible text or borders
+I09: ☐ Dark mode checked: page readable, no blown-out white sections
+```
+
+### J. CODE QUALITY (6 checks)
 
 ```spec
 I01: ☐ TypeScript strict mode — no type errors
@@ -175,8 +192,8 @@ I06: ☐ Build succeeds without errors (npm run build)
 ## SCORING
 
 ```spec
-TOTAL CHECKS: 90
-PASS THRESHOLD: 81/90 (90%)
+TOTAL CHECKS: 99
+PASS THRESHOLD: 89/99 (90%)
 
 SCORING:
   90-100%  (81-90 pass)  → APPROVE — ship it
@@ -211,6 +228,7 @@ CRITICAL FAILURES (auto-reject regardless of score):
 - SEO: XX/8
 - Security: XX/6
 - Agent-Browsable: XX/7
+- Visual Quality: XX/9
 - Code Quality: XX/6
 
 ## Failures

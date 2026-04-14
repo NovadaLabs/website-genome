@@ -1,37 +1,32 @@
-# Website Genome OS v2.1
+# Website Genome OS v2.2
 
-> Single-file agent operating system for building or replicating any website.
-> Old genome (24 files) → `genome/v1/` as reference library.
-> This file IS the process. Reference files are pulled on demand.
->
-> HOW TO READ THIS: Every line exists because an agent failed without it.
+> Single-file agent OS. Every line burned in from a real failure.
 > This is a QUALITY SYSTEM, not a checklist. "I did something" ≠ "I did it completely."
-> For each step: did you produce the EXACT artifact specified? Is it COMPLETE?
-> If you catch yourself thinking "close enough, moving on" — you are failing.
+> For each step: did you produce the EXACT artifact? Is it COMPLETE?
 
 ---
 
-## STEP 0: PREREQUISITES + CHROME (BLOCKING — before anything else)
+## STEP 0: PREREQUISITES — BLOCKING GATE
 
 ```
-PREREQUISITES: See README.md for full list. Human must have installed tools and set up accounts.
+FIRST QUESTION: Does the target site have auth-gated pages (dashboard, settings, billing)?
 
-CHROME (the only human step per site):
-  The human's Chrome must be running with their login sessions accessible.
-  Without this, auth-gated extraction is impossible.
+  NO  → Public site fast path. Skip Chrome setup entirely.
+        Tools: site-crawler (bulk) + Playwright (backup). Proceed to LAYER 0.
 
+  YES → Chrome is required. Do not skip this.
+
+CHROME SETUP (auth-gated sites only — one command per session):
   Human runs: cd ~/Projects/novada-replicate && npm run launch-chrome
-  This launches Chrome on port 9222 with the user's cookies.
+  What this does: copies your login sessions → relaunches Chrome on port 9222.
 
-  Agent verifies: bb-browser open <any-url> — does it work?
+  Agent verifies: bb-browser open <any-url> — does it connect?
   → YES → proceed to LAYER 0
   → NO  → STOP. Tell human: "Please run: cd ~/Projects/novada-replicate && npm run launch-chrome"
-           Do not proceed until Chrome is confirmed running.
+           Do not proceed until confirmed.
 
-  bb-browser connects to this Chrome instance. Without it, bb-browser has no auth sessions.
-
-  MULTI-AGENT RULE: Each agent opens its OWN TAB. Never share tabs.
-    bb-browser open <url> always opens a new tab. Use it. Close when done.
+  RULE: bb-browser = your Chrome's login sessions. No alternative for auth-gated pages.
+  RULE: Each agent opens its OWN TAB. Never share tabs between agents.
 ```
 
 ---
@@ -39,86 +34,62 @@ CHROME (the only human step per site):
 ## LAYER 0: MISSION — "What am I doing?"
 
 ```
-READ THIS → DECIDE → GO TO THE RIGHT PIPELINE
+READ → DECIDE → GO TO THE RIGHT PIPELINE
 
-┌─────────────────────────────────────────────┐
-│  INPUT: URL, project checklist, or handoff  │
-│                                             │
-│  Is there an existing replica to fix?       │
-│  ├── YES → FIX mode → go to §FIX           │
-│  └── NO                                     │
-│       Is there a URL to replicate?          │
-│       ├── YES → COPY mode → go to §COPY    │
-│       └── NO  → BUILD mode → go to §BUILD  │
-└─────────────────────────────────────────────┘
+  Existing replica to fix?      → FIX mode  → §FIX
+  URL to replicate?             → COPY mode → §COPY
+  Project checklist to build?   → BUILD mode → §BUILD
+
+SCALE:
+  < 10 pages:   single agent, fully autonomous
+  10-50 pages:  single agent, phase commits
+  50+ pages:    orchestrator + fresh executor agents per phase
+  Why fresh: orchestrator accumulates context bias after extraction → gets sloppy in build.
+             Fresh agents read specs/ only — no bias, no shortcuts.
 
 QUESTION POLICY:
-  Ask ONLY when: checklist is ambiguous AND decision is irreversible
-    (architecture, auth provider, data model)
-  Default silently for: colors, spacing, copy, icons
-  When torn between two options: pick the simpler one, document the choice
-
-SCALING:
-  Simple site (< 10 pages): single agent, this file, fully autonomous
-  Complex site (10-50 pages): single agent, careful phase commits
-  Large site (50+ pages): orchestrator + fresh executor agents
-
-  ORCHESTRATOR PROTOCOL (for large sites):
-    The orchestrator reads the genome and PLANS. Fresh agents EXECUTE.
-    Why: a single agent accumulates context bias. After extraction it "knows" the site
-    and gets sloppy during build — exactly what happened on iploop.io.
-
-    Orchestrator:
-      1. Reads genome + runs Steps 1-3 (CONNECT, CRAWL, EXTRACT)
-      2. Generates specs/ folder
-      3. Dispatches fresh executor agents per build phase
-      4. Reviews each phase output (or delegates to review agent)
-    Executor (fresh, zero context):
-      1. Reads specs/ folder + genome §BUILD or §FIX
-      2. Builds assigned phase
-      3. Commits + pushes
-    Handoff = git repo state + specs/ folder. No context carries over.
+  Ask ONLY when decision is irreversible: architecture, auth provider, data model.
+  Default silently: colors, spacing, copy, icons. When torn: pick simpler, document choice.
 ```
 
 ---
 
-## LAYER 1: TOOLS — "What do I have?"
+## LAYER 1: TOOLS — "What do I use?"
 
 ```
-EXTRACTION (for COPY/FIX mode):
-  1. bb-browser        PRIMARY — interactive extraction (hover, click, login pages)
-     open <url> | snapshot -i | eval "js" | click @ref | hover @ref | close
-     Best for: dropdowns, tabs, modals, auth-gated pages, component capture
-  2. site-crawler      BULK — automated crawl + extraction (100+ pages in one command)
-     site-crawler <url> --output specs/ --max-pages 200
-     Best for: crawling entire sites, downloading all assets, generating manifest
-     Output: per-page HTML + CSS + Markdown + screenshot + metadata + _assets/
-     Repo: NovadaLabs/site-crawler | Install: pip install -e .
-  3. Chrome CDP        BACKUP — programmatic batch extraction
-  4. Chrome DevTools    BACKUP — quick checks, separate profile
-  5. Playwright         BACKUP — public pages only, headless
-  6. gstack            QA — responsive testing at 375/768/1440
+EXTRACTION DECISION TREE:
+  Public pages only?
+  ├── YES → site-crawler + Playwright (no Chrome needed)
+  └── NO (has auth-gated pages)
+       ├── bb-browser connected? → bb-browser (primary)
+       └── bb-browser down?     → CDP via novada-replicate
 
-TOOL SELECTION:
-  Crawl 100+ pages automatically?     → site-crawler (Step 2)
-  Capture dropdowns/tabs/modals?      → bb-browser (Step 3-COMPONENTS)
-  Auth-gated dashboard pages?         → bb-browser (needs user's Chrome)
-  Download all images/fonts/CSS?      → site-crawler (automated)
-  Responsive QA testing?              → gstack
+TOOL REFERENCE:
+  bb-browser      open <url> | snapshot -i | eval "js" | click @ref | hover @ref | close
+                  Best for: dropdowns, tabs, modals, auth-gated pages, component capture
 
-BUILD:
-  Next.js 16 + shadcn/ui + Tailwind 4 + Geist + Vercel
-  → versions pinned in genome/v1/VERSION.md
+  site-crawler    site-crawler <url> --output specs/ --max-pages 200
+                  Best for: crawl 100+ pages, download all assets, generate manifest
+                  Output: HTML + CSS + Markdown + screenshot + metadata + _assets/ per page
+                  Repo: NovadaLabs/site-crawler
 
-RULE: AI needs structured data (HTML, a11y tree, CSS), NOT screenshots.
-RULE: Auth-gated pages → bb-browser (user's Chrome). Never a fresh browser.
-RULE: Screenshots are for human QA only — never the primary extraction artifact.
+  Playwright      Headless. Public pages only. No login state.
 
-SUB-AGENT PROTOCOL:
-  If dispatching parallel agents to build pages:
-    → Send 1 agent as a canary first. Verify it completes successfully.
-    → Only then dispatch the rest in batches of 2-3.
-    → If agents hit limits or fail: fall back to sequential. Don't block on broken parallelism.
+  CDP (novada-replicate)  npm run launch-chrome → Chrome on port 9222
+                          Backup when bb-browser can't connect.
+
+  gstack          Responsive QA at 375 / 768 / 1440px
+
+RULES:
+  AI needs HTML + a11y tree + CSS. NOT screenshots.
+  Auth-gated pages → always bb-browser (user's Chrome). Never a fresh browser instance.
+  Screenshots = human QA only. Never a primary extraction artifact.
+
+BUILD STACK: Next.js 16 + shadcn/ui + Tailwind 4 + Geist + Vercel
+  Pinned versions: genome/v1/VERSION.md
+
+SUB-AGENT RULE: Send 1 canary agent first. Verify it completes. Then dispatch rest in batches of 2-3.
+  If agents fail: fall back to sequential. Don't block on broken parallelism.
 ```
 
 ---
@@ -127,227 +98,164 @@ SUB-AGENT PROTOCOL:
 
 ```
 STEP 1: CONNECT
-  Action: bb-browser open <target-url>
-  Gate:   Can you see the page? Auth-gated pages accessible?
-          → If not: ask human to log in, then retry
+  bb-browser open <target-url>
+  Gate: Can you see auth-gated pages?
+  → NO → ask human to log in → retry
+
+STEP 1.5: DETECT TECH STACK
+  Before extraction, identify what the target site uses.
+  Builder uses SAME stack as original — wrong tech stack = different behavior.
+
+  bb-browser eval + page source inspection:
+  Framework:  □ __NEXT_DATA__ → Next.js  □ ng-version → Angular  □ data-v- → Vue
+  CSS:        □ flex bg-* text-* → Tailwind  □ col-md-* btn-* → Bootstrap
+  Auth:       □ clerk.js → Clerk  □ next-auth cookies → NextAuth  □ auth0.js → Auth0  □ supabase-auth → Supabase
+  Payment:    □ stripe.js → Stripe  □ paddle.js → Paddle
+  Analytics:  □ gtag.js → GA  □ posthog-js → PostHog  □ plausible.js → Plausible
+  Other:      □ sentry.js → Sentry  □ intercom widget → Intercom  □ algolia → Algolia
+
+  Output: specs/tech-stack.json
+  Gate: cat specs/tech-stack.json | python3 -c "import json,sys; d=json.load(sys.stdin); assert d.get('framework') and d.get('css'), 'FAIL: framework or css missing'"
 
 STEP 2: DISCOVER ALL PAGES
-  Use site-crawler (bulk) + bb-browser (auth-gated) to find every URL:
-    site-crawler <url> --output specs/public --max-pages 200
-    bb-browser: navigate sidebar, click every link, collect all paths
-  Classify: INTERNAL (replicate) / PRODUCT-SUBDOMAIN (replicate) / EXTERNAL (keep)
-  Auth-gated pages (dashboard) come FIRST — they are the product.
+  site-crawler <url> --output specs/public --max-pages 200   ← public pages
+  bb-browser: navigate sidebar, click every link, collect paths  ← auth-gated pages
+  Classify: INTERNAL (replicate) / EXTERNAL (keep as-is)
+  DASHBOARD FIRST — auth-gated pages are the product. Marketing pages are the wrapper.
   Output: specs/sitemap.json
-  Gate: total discovered >= what you see in navigation?
+  Gate: python3 -c "import json; d=json.load(open('specs/sitemap.json')); print(f'Pages found: {len(d) if isinstance(d,list) else len(d.get(\"pages\",d))}')"
+        → Verify count matches what you see in navigation. If short → re-crawl.
 
-STEP 3: EXTRACT — The 8 Dimensions of a Complete Webpage
+STEP 3: EXTRACT — 8 Dimensions (ALL required for EVERY page)
 
   REPLICATION QUALITY = EXTRACTION QUALITY.
-  If you extract 100% of a page, replication is mechanical.
-  If you extract 70%, you guess the other 30%, and the human catches it.
-  Every failure in our history traces to incomplete extraction, not bad code.
+  Extract 100% → build is mechanical. Extract 70% → guess 30% → human catches it every time.
+  Every replication failure in history traces to incomplete extraction, not bad code.
 
-  A webpage is made of exactly 8 things. For EVERY page in the sitemap,
-  capture ALL 8. A page missing ANY dimension is an incomplete extraction.
+  For EVERY page in the sitemap, capture ALL 8:
 
-  ┌─────────────────────────────────────────────────────────────────────┐
-  │ DIM 1: STRUCTURE — the HTML DOM tree                              │
-  │   bb-browser eval "document.documentElement.outerHTML"             │
-  │   Save to: specs/html/<page-name>.html                            │
-  │   Contains: every element, every attribute, every text node        │
-  │   This is the PRIMARY source for rebuilding the page.              │
-  ├─────────────────────────────────────────────────────────────────────┤
-  │ DIM 2: STYLE — computed CSS for every element                     │
-  │   site-crawler saves styles.css per page automatically             │
-  │   Also extract design tokens (colors, fonts, spacing, radius):     │
-  │     Colors: getComputedStyle → backgroundColor, color, borderColor │
-  │     Fonts: getComputedStyle → fontFamily (+ download @font-face)   │
-  │   Save to: specs/design-tokens.json + specs/css/<page-name>.css    │
-  ├─────────────────────────────────────────────────────────────────────┤
-  │ DIM 3: ASSETS — every file the page references                    │
-  │   Images: all <img> src URLs → download to specs/assets/images/    │
-  │   Fonts: all @font-face URLs → download to specs/assets/fonts/     │
-  │   SVGs: all inline <svg> elements → save to specs/assets/svgs/     │
-  │   Icons: all icon references → download or extract                 │
-  │   Gate: 0 placeholder images. Every <img> = real downloaded file.  │
-  ├─────────────────────────────────────────────────────────────────────┤
-  │ DIM 4: CONTENT — every text string, verbatim                      │
-  │   site-crawler saves page.md (clean Markdown) per page             │
-  │   For blog posts: save FULL article HTML, don't summarize          │
-  │   For data pages: save all visible numbers, labels, table data     │
-  │   Rule: every text in the replica comes from extraction, not AI    │
-  ├─────────────────────────────────────────────────────────────────────┤
-  │ DIM 5: BEHAVIOR — what happens when you interact                  │
-  │   For EVERY clickable element on EVERY page:                       │
-  │     Click it. What happens? Record:                                │
-  │     - Tab → content changes (capture each tab's content)           │
-  │     - Button → API call / modal / navigation (capture result)      │
-  │     - Dropdown → options list + what changes (capture each option) │
-  │     - Hover → reveal / color change / tooltip (capture state)      │
-  │     - Form → fields + validation + submit result (capture all)     │
-  │   This is RECURSIVE: if clicking reveals new elements, click those │
-  │   Save to: specs/interactions.json                                 │
-  │   Gate: every clickable element documented with its result         │
-  ├─────────────────────────────────────────────────────────────────────┤
-  │ DIM 6: STATE — all possible states the page can be in             │
-  │   Tabs: capture content for EVERY tab, not just the default        │
-  │     → Click each tab. Screenshot. Save HTML. Record the URL.       │
-  │     → Sub-tab URLs are often hidden until you click                │
-  │       (e.g., /overview/res/ has tabs at /consume/, /account/, etc.)│
-  │     → Save tab-urls.json mapping tab names to their actual URLs    │
-  │   Dropdowns: capture ALL options and what each selection changes    │
-  │   Forms: capture empty state, filled state, error state, success   │
-  │   Auth: capture logged-in view + logged-out redirect               │
-  │   Save to: specs/states/<page-name>/<state-name>.html              │
-  │   Gate: number of states captured >= number of interactive elements │
-  │                                                                     │
-  │   SPA NOTE: React/Vue/Angular apps render inside a deep component  │
-  │   tree. document.querySelector('main') may return empty.            │
-  │   Use document.documentElement.outerHTML for the full page.         │
-  │   Parse offline. Screenshots are the backup when HTML is unusable.  │
-  ├─────────────────────────────────────────────────────────────────────┤
-  │ DIM 7: NETWORK — every API call the page makes                    │
-  │   Open DevTools Network tab or intercept via CDP                   │
-  │   Interact with the page: click buttons, submit forms              │
-  │   For each API call: URL, method, headers, request, response       │
-  │   Save to: specs/apis.json                                        │
-  │   Strategy per endpoint: PROXY (real API) / MOCK (saved response)  │
-  │   Gate: every Submit button has a captured API endpoint             │
-  ├─────────────────────────────────────────────────────────────────────┤
-  │ DIM 8: METADATA — everything invisible but essential              │
-  │   <title>, <meta description>, OG tags, JSON-LD                    │
-  │   site-crawler saves metadata.json per page automatically          │
-  │   Save to: specs/metadata/<page-name>.json                         │
-  └─────────────────────────────────────────────────────────────────────┘
+  DIM 1: STRUCTURE   document.documentElement.outerHTML → specs/html/<page>.html
+                     This is the PRIMARY source for rebuilding. Don't use querySelector('main').
 
-  SHARED COMPONENTS (navbar, footer, hero):
-    These appear on EVERY page. Extract them separately as visual units:
-    → Screenshot + outerHTML + structure (columns, items, sub-links)
-    → Navbar dropdowns: hover each → capture each dropdown state
-    → Save to: specs/components/
+  DIM 2: STYLE       Computed CSS per page → specs/css/<page>.css
+                     Design tokens (colors, fonts, spacing, radius) → specs/design-tokens.json
+                     (site-crawler saves styles.css automatically)
 
-  COMPLETENESS CHECK (after extracting a page):
-    □ HTML saved?  □ CSS saved?  □ Assets downloaded?  □ Content captured?
-    □ Every click documented?  □ All states visited?  □ APIs intercepted?  □ Metadata saved?
-    If ANY box is unchecked → the page extraction is INCOMPLETE.
-    Incomplete extraction → incomplete replica → human catches it → wasted time.
+  DIM 3: ASSETS      All images + fonts + SVGs → downloaded to specs/assets/
+                     Gate: 0 placeholder images. Every <img> = real downloaded file.
 
-  TOOLS:
-    site-crawler: bulk extraction (HTML, CSS, Markdown, screenshots, assets per page)
-    bb-browser: interactive extraction (hover, click, forms, auth-gated pages)
-    Use BOTH: site-crawler for the static 8 dimensions, bb-browser for behavior + state.
+  DIM 4: CONTENT     Verbatim text, all visible numbers, table data → specs/pages/<page>.md
+                     (site-crawler saves page.md automatically)
+                     Rule: every text in the replica comes from extraction, not AI imagination.
 
-  OUTPUT: specs/ folder with all 8 dimensions for every page.
-  GATE: NO CODE UNTIL SPECS ARE COMPLETE. The specs ARE the product of extraction.
+  DIM 5: BEHAVIOR    Click EVERY interactive element on EVERY page. Record what changes:
+                     Tab → each tab's content. Dropdown → each option + what it changes.
+                     Button → API call / modal / navigation. Form → all field states.
+                     RECURSIVE: if clicking reveals new elements, click those too.
+                     → specs/interactions.json
+
+  DIM 6: STATE       ALL possible page states:
+                     Tabs: click each → capture content → save URL (sub-tab URLs are hidden)
+                     Dropdowns: each option + resulting content change
+                     Forms: empty / filled / error / success
+                     Auth: logged-in view + logged-out redirect
+                     → specs/states/<page>/<state>.html
+
+  DIM 7: NETWORK     Intercept API calls via DevTools or CDP.
+                     For each: URL, method, headers, request body, response.
+                     Strategy per endpoint: PROXY (real API) or MOCK (saved response).
+                     Gate: every Submit button has a captured API endpoint.
+                     → specs/apis.json
+
+  DIM 8: METADATA    <title>, meta description, OG tags, JSON-LD
+                     → specs/metadata/<page>.json (site-crawler saves automatically)
+
+  SHARED COMPONENTS (navbar, footer, hero — appear on every page):
+    Extract separately: outerHTML + structure (columns, items, sub-links).
+    Navbar: hover each menu item → capture dropdown HTML + screenshot.
+    → specs/components/
+    WHY: Shared components affect every page. A wrong navbar = 100 broken pages.
+
+  COMPLETENESS CHECK (after each page):
+    □ HTML  □ CSS  □ Assets  □ Content  □ Interactions  □ States  □ APIs  □ Metadata
+    Any unchecked = incomplete. Incomplete extraction → incomplete replica → human catches it.
+
+  EXTRACTION GATE (non-negotiable — run this before any code):
+    bash ~/.claude/skills/website-genome/verify-extraction.sh specs/
+    → Exit 0: proceed to Step 3.5 / Step 4
+    → Exit 1: fix every FAIL it reports. Re-run. Do not proceed until Exit 0.
+    This script checks all 8 dimensions mechanically. It cannot be faked.
 
 STEP 3.5: HUMAN GATE (conditional)
   Simple site (< 15 pages, no auth-gated areas):
-    → SKIP this step. Proceed to Step 4 autonomously.
-    → The spec files themselves are the quality gate.
+    → Skip. Proceed autonomously.
 
-  Complex site (15+ pages, OR has auth-gated dashboard):
-    → Show the human: page count, route list, interactive states found, assets downloaded.
-    → "I found N pages, M interactive elements, downloaded K assets. Ready to build?"
-    → If human says pages are missing → go back to Step 2 or 3.
-    → If human approves → proceed to Step 4.
-
-  This gate exists because three agents skipped extraction and started coding.
-  For complex sites, a self-check alone doesn't prevent that.
+  Complex site (15+ pages OR has dashboard):
+    → Report: page count, route list, interactive states found, assets downloaded.
+    → "Found N pages, M interactive elements, K assets. Ready to build?"
+    → Human approves → Step 4. Human says missing pages → back to Step 2/3.
+    WHY: Three agents skipped extraction and started coding. This gate prevents it.
 
 STEP 4: BUILD
   a. Scaffold: Next.js 16 + shadcn/ui + Geist
-  b. Apply extracted design tokens (colors, fonts, spacing)
-  c. Build layouts (marketing + dashboard + auth)
-  d. Build pages bottom-up: for each page in sitemap →
-     → Read its extracted HTML + structure
-     → Build the component from EXTRACTED DATA, not imagination
-     → Every text string = from extraction. Every image = downloaded asset.
-  e. Wire interactions (dropdowns, tabs, forms, modals)
-
-  GOLDEN RULE: Every pixel traces to observed data. Never invent content.
-
-  SHARED COMPONENT DETECTION (before building pages):
-    Scan all extracted sub-tabs. If multiple pages share identical layouts
-    (e.g., Analytics tab looks the same across 5 products), build ONE shared
-    component and reuse it. This prevents 5 copies of the same pricing page.
+     Wire verify-extraction.sh as prebuild hook (blocks npm run build if specs/ incomplete):
+     npm pkg set scripts.prebuild="bash ~/.claude/skills/website-genome/verify-extraction.sh specs/"
+  b. Apply design tokens from specs/design-tokens.json
+  c. Scan all extracted pages → identify shared components → build ONCE, reuse everywhere
+  d. Build each page bottom-up: every text = from specs/, every image = downloaded asset
+     GOLDEN RULE: Every pixel traces to observed data. Never invent content.
+  e. Wire interactions: dropdowns, tabs, forms, modals
 
   PARALLEL BUILD RULE:
-    If dispatching multiple agents to build pages in parallel:
-    → Agents ONLY write files. They do NOT run npm run build.
-    → Only the orchestrator runs npm run build (prevents race conditions).
-    → An orchestrator that also executes will always cut corners.
-      After hours of strategic work, the instinct is to "just get it done."
-      Fresh agents don't have this fatigue — dispatch them for execution.
+    Agents ONLY write files. Orchestrator ONLY runs npm run build.
+    Never both. An orchestrator that also executes always cuts corners.
 
-  Reference (read on demand during build):
-    → genome/v1/04-components.md — molecule/organism patterns
-    → genome/v1/05-page-templates.md — layout skeletons
-    → genome/v1/02-design-tokens.md — token implementation
+  Reference on demand: 04-components.md | 05-page-templates.md | 02-design-tokens.md
+  Gate: npm run build && bash ~/.claude/skills/website-genome/verify-build.sh . <original-domain>
+        → Exit 0: proceed to Step 5
+        → Exit 1: fix what it reports before continuing
 
-  Gate: npm run build passes? Every page renders?
+STEP 5: VERIFY → REFLECT → ACT (max 3 iterations)
 
-STEP 5: VERIFY → REFLECT → ACT (loop, max 3 iterations)
+  COMPONENT COMPARE FIRST (before page checks):
+    Open original + replica side by side. Never evaluate replica alone.
+    For each shared component: trigger on original → trigger on replica → compare:
+    □ Same column layout?  □ Same section headers?  □ Same item count?
+    □ Same background?  □ Same interactive behavior?
+    Fix structural mismatches BEFORE continuing to page-level checks.
 
-  COMPONENT COMPARISON (do this FIRST — before route checks):
-    Open BOTH original and replica simultaneously. Never evaluate replica alone.
-    For each shared component (navbar dropdowns, footer, hero):
-      1. Trigger the component on ORIGINAL → screenshot
-      2. Trigger same component on REPLICA → screenshot
-      3. Compare:
-         □ Same column layout?
-         □ Same section headers (exact text)?
-         □ Same item count per section?
-         □ Same background color / gradient?
-         □ Same positioning (full-width vs floating)?
-         □ Same interactive behavior (hover state, animation)?
-      4. If ANY structural mismatch → fix BEFORE continuing to page-level verify
-    WHY: Shared components affect every page. A broken navbar = 100 wrong pages.
+  DEPTH-FIRST PAGE WALK (dashboard/app pages):
+    For EACH page: list EVERY clickable element → click each on original → does replica match?
+    A page with 4 tabs × 3 buttons × 2 forms = 24 paths. Click all of them.
+    RECURSIVE: if clicking reveals new elements, click those too.
 
-  DEPTH-FIRST PAGE WALK (for dashboard/app pages — do this BEFORE the checklist):
-    For EACH page in the sidebar, open it on the ORIGINAL site:
-      1. List EVERY clickable element: tabs, buttons, links, dropdowns, forms
-      2. Click/interact with EACH one on the ORIGINAL:
-         - Tab → capture each tab's content
-         - Button → what does it do? API call? Modal? Navigate?
-         - Form → what fields? What happens on submit?
-         - Dropdown → what options? Does selecting change content?
-      3. Now do the SAME on the REPLICA — does each element behave identically?
-      4. If clicking reveals NEW elements (sub-tabs, nested forms), repeat recursively
-      5. Only mark this page "complete" when ALL clickable paths match at ALL depths
-    This is RECURSIVE. Don't stop at the first level.
-    A page with 4 tabs × 3 buttons × 2 forms = 24 paths to verify, not 1.
-
-  VERIFY (run all checks):
+  VERIFY CHECKLIST:
     □ npm run build passes (zero errors)
-    □ Every internal link resolves (zero 404s)
-    □ Every <img> src = real downloaded file (zero placeholders)
-    □ Every nav item navigates to correct page
-    □ Every dropdown/tab/form works (click each, don't just look)
-    □ Dashboard sidebar: every item → working page with content
-    □ Dashboard depth: every sub-tab, form, button within each page works
+    □ Zero broken internal links
+    □ Zero links to original domains (self-contained)
+    □ Every nav item navigates correctly
+    □ Every <img> = real downloaded file (zero placeholders)
+    □ Every dropdown/tab/form works (click each, don't screenshot)
+    □ Dashboard: every sidebar item → working page with real content
+    □ Dashboard depth: every sub-tab, button, form within each page works
     □ Content: replica sections >= 60% of original's sections per page
-    □ Self-contained: zero links to original product domains
-    □ Production server: npx next start (not dev server for verification)
+    □ Production: npm run build && npx next start (not dev server)
 
-  → All pass? EXIT → report to human with numbers
-  → Any fail? ↓
+  All pass? → DISPATCH FRESH VERIFIER (see below). Then EXIT with its report.
+  Any fail? → REFLECT: what failed? why? what data is missing?
+             → ACT: fix. May need to re-extract (Step 3).
+             → VERIFY again.
 
-  REFLECT:
-    List each failure. For each:
-      What failed? Why? What data am I missing?
-    Prioritize: broken > missing > cosmetic
+  FRESH VERIFIER DISPATCH (after all checks pass — orchestrator must not self-verify):
+    Agent(
+      subagent_type="general-purpose",
+      prompt=open("~/.claude/skills/website-genome/verifier-prompt.md").read()
+             + f"\n\nOriginal: <original-url>\nReplica: <project-dir>\nChrome: running on port 9222"
+    )
+    WHY: An agent that built the site will miss its own mistakes. Fresh eyes catch what fatigue hides.
 
-  ACT:
-    Fix each failure. May need to go back to EXTRACT (step 3) for missing data.
-    Then → back to VERIFY
-
-  EXIT after: all gates pass OR 3 iterations completed
-  NEVER declare done without passing VERIFY.
-
-  Report format:
-    Pages: N built | Links: X checked, 0 broken | Images: M real assets
-    Dashboard: N/N sidebar items working | Score: XX/100
-    Remaining gaps: [list honestly]
+  NEVER declare done without the verifier's report.
+  Report format: "Pages: N | Links: X checked, 0 broken | Images: M assets | Score: XX/100"
 ```
 
 ---
@@ -357,99 +265,76 @@ STEP 5: VERIFY → REFLECT → ACT (loop, max 3 iterations)
 ```
 STEP 1: READ CHECKLIST
   Input: human-setup/project-checklist.md
-  Extract: brand, website type, features, pages needed, auth, database
+  Extract: brand, type, features, pages, auth, database needs
 
 STEP 2: GENERATE SPECS
-  a. Fill specs/prd.md (from genome/v1/18-prd-template.md)
-  b. Fill specs/tech-rd.md (from genome/v1/19-tech-rd-template.md)
-  Gate: PRD + Tech RD exist with real content, not placeholders?
+  specs/prd.md      → template: genome/v1/18-prd-template.md
+  specs/tech-rd.md  → template: genome/v1/19-tech-rd-template.md
+  Gate: wc -l specs/prd.md specs/tech-rd.md  → both must be > 20 lines
 
 STEP 3: SCAFFOLD
   npx create-next-app@16 <name> --typescript --tailwind --eslint --app --src-dir --turbopack
   npx shadcn@2 init -d
   npm install geist lucide-react
   + conditional deps from PRD (auth → @clerk/nextjs, db → drizzle-orm, etc.)
-  → Check genome/v1/VERSION.md for all pinned versions before installing
-
+  Check genome/v1/VERSION.md for pinned versions before installing.
+  Wire verify-build.sh as prebuild hook (blocks npm run build on broken builds):
+  npm pkg set scripts.prebuild="bash ~/.claude/skills/website-genome/verify-build.sh ."
   git init && git add -A && git commit -m "chore: scaffold"
   gh repo create <name> --private --source=. --push
 
-STEP 4: BUILD (phase by phase)
+STEP 4: BUILD (each phase: Read ref → Do → Gate → Commit)
 
   Phase A: Design tokens + layouts
-    Read: genome/v1/02-design-tokens.md, 05-page-templates.md
-    Do:   globals.css tokens, root layout, marketing layout, dashboard layout, auth layout
-    Out:  app/layout.tsx, app/(marketing)/layout.tsx, app/(dashboard)/layout.tsx
-    Gate: npm run dev renders empty layouts without errors
+    Read: 02-design-tokens.md, 05-page-templates.md
+    Do:   globals.css tokens, root layout, marketing/dashboard/auth layouts
+    Gate: npm run dev 2>&1 | grep -i "error\|failed" | head -5  → must be empty
     Commit: "feat: scaffold + design tokens + layouts"
 
   Phase B: Public pages
-    Read: genome/v1/04-components.md, 06-page-types.md, 13-content-strategy.md
-    Do:   landing, features, pricing, about, blog, docs, legal pages
-    Out:  page.tsx files under (marketing) route group
-    Gate: every public page renders, internal links work
+    Read: 04-components.md, 06-page-types.md, 13-content-strategy.md
+    Do:   landing, features, pricing, about, blog, docs, legal
+    Gate: npm run build && bash ~/.claude/skills/website-genome/verify-build.sh .
+          → check: zero broken links in public routes
     Commit: "feat: public pages"
 
-  Phase C: Auth (skip if no auth needed)
-    Read: genome/v1/08-state-data.md §auth
-    Do:   Clerk setup, proxy.ts, sign-in/sign-up pages, ClerkProvider
-    Out:  proxy.ts, app/(auth)/ pages, env vars configured
-    Gate: can sign up → sign in → see dashboard redirect → sign out
-    Commit: "feat: auth with Clerk"
+  Phase C: Auth (skip if no auth)
+    Read: 08-state-data.md §auth
+    Do:   Clerk setup, proxy.ts, sign-in/up pages, ClerkProvider
+    Gate: bb-browser open http://localhost:3000/sign-up → complete flow manually → confirm redirect to dashboard
+    Commit: "feat: auth"
 
-  Phase D: App pages (skip if no dashboard needed)
-    Read: genome/v1/06-page-types.md §dashboard
-    Do:   dashboard overview, resource CRUD, settings, admin
-    Out:  app/(dashboard)/ pages
-    Gate: sidebar navigation works, every route shows content
-    Commit: "feat: dashboard and app pages"
+  Phase D: Dashboard (skip if no dashboard)
+    Read: 06-page-types.md §dashboard
+    Do:   overview, resource CRUD, settings, admin
+    Gate: bash ~/.claude/skills/website-genome/verify-build.sh . → check dashboard routes all return 200
+    Commit: "feat: dashboard"
 
-  Phase E: Data layer (skip if no database needed)
-    Read: genome/v1/08-state-data.md §database
-    Do:   schema, migrations, server actions, wire to forms
-    Out:  db/schema.ts, db/index.ts, server actions
-    Gate: CRUD persists data end-to-end
-    Commit: "feat: database and server actions"
+  Phase E: Data layer (skip if no database)
+    Read: 08-state-data.md §database
+    Do:   schema, migrations, server actions, wire forms
+    Gate: bb-browser create → read → update → delete one record → confirm in db
+    Commit: "feat: database"
 
   Phase F: Interactions + state
-    Read: genome/v1/07-interactions.md
-    Do:   all button handlers, form submissions, modals, filters, search, loading states
-    Gate: every interactive element responds correctly
-    Commit: "feat: wire interactions"
+    Read: 07-interactions.md
+    Do:   button handlers, form submissions, modals, filters, loading states
+    Gate: bb-browser: click every button/dropdown/form on 3 representative pages → confirm responses
+    Commit: "feat: interactions"
 
-  Phase G: Invisible layer
-    Read: genome/v1/09-invisible-layer.md
-    Do:   metadata per page, sitemap.ts, robots.ts, JSON-LD, a11y, CSP, rate limiting
-    Gate: Lighthouse all categories >= 90
-    Commit: "feat: SEO + a11y + security"
+  Phase G: Invisible layer + polish
+    Read: 09-invisible-layer.md, 10-agent-browsable.md, 11-error-edge-cases.md, 12-responsive.md
+    Do:   metadata per page, sitemap.ts, robots.ts, JSON-LD, a11y, CSP, rate limiting,
+          loading.tsx + error.tsx + not-found.tsx, responsive at 375/768/1440px
+    Gate: npx next start & sleep 3 && npx lighthouse http://localhost:3000 --output json --quiet \
+          | python3 -c "import json,sys; d=json.load(sys.stdin); [print(k,round(v['score']*100)) for k,v in d['categories'].items()]"
+          → all categories >= 90
+    Commit: "feat: invisible layer + error handling + responsive"
 
-  Phase G.5: Agent-browsable layer
-    Read: genome/v1/10-agent-browsable.md
-    Do:   data-agent-* attributes on interactive elements, JSON-LD structured data,
-          API discovery endpoint (/api), API endpoints mirroring page data
-    Gate: accessibility tree meaningful, status conveyed via text not just color
-    Commit: "feat: agent-browsable layer"
+  GATE FAILURE RULE: Fix before next phase. Blocked after 2 attempts → report to human.
 
-  Phase G.6: Error + edge cases
-    Read: genome/v1/11-error-edge-cases.md
-    Do:   loading.tsx per route group, error.tsx, not-found.tsx, global-error.tsx,
-          empty states for lists/tables, form validation errors, network error handling
-    Gate: no unhandled errors, graceful degradation on empty data
-    Commit: "feat: error handling and edge cases"
-
-  Phase H: Responsive pass
-    Read: genome/v1/12-responsive.md
-    Do:   verify at 375px, 768px, 1440px; fix overflow, mobile nav, table scroll
-    Gate: no horizontal scrollbar, all pages usable on mobile
-    Commit: "fix: responsive adjustments"
-
-  GATE FAILURE RULE (all phases):
-    Gate fails → fix before proceeding to next phase.
-    Blocked after 2 attempts → report to human with what's failing and why.
-
-STEP 5: VERIFY → REFLECT → ACT (same loop as §COPY step 5)
-  Use checklist from genome/v1/16-validation.md (90-point review)
-  Target: >= 90% to ship
+STEP 5: VERIFY → REFLECT → ACT (same loop as §COPY Step 5)
+  Use genome/v1/16-validation.md (90-point review). Target: >= 90% to ship.
 ```
 
 ---
@@ -457,30 +342,25 @@ STEP 5: VERIFY → REFLECT → ACT (same loop as §COPY step 5)
 ## §FIX — Patch an existing replica
 
 ```
-STEP 0: DASHBOARD FIRST
+STEP 0: DASHBOARD FIRST (no exceptions)
   Before reading any handoff, before writing any code:
-  → Infer dashboard URL from the project's existing routes or original site domain
-    (e.g., dashboard.example.com, or /dashboard in the replica)
-  → bb-browser open <dashboard-url>
-  → Is the dashboard accessible? Capture FULL sidebar structure NOW.
-  → See §COPY Step 3 DASHBOARD RULE for full capture protocol.
-  This is Step 0 because it's the #1 persistent failure.
+  → bb-browser open <dashboard-url> → capture full sidebar structure.
+  This is Step 0 because "dashboard first" is the #1 persistent failure pattern.
 
-STEP 1: READ HANDOFF + REFERENCED SOPs
-  The handoff is a HYPOTHESIS. Read the actual SOP sections it points to.
+STEP 1: READ HANDOFF
+  Treat it as a hypothesis, not ground truth. Read the SOP sections it references.
 
 STEP 2: OWN COMPARISON
-  Navigate original + replica side-by-side. List EVERY difference.
-  The handoff may be incomplete — trust your own eyes over the handoff.
+  Navigate original + replica side by side. List EVERY difference with your own eyes.
+  The handoff may be incomplete. Trust observation over documentation.
 
-STEP 3: EXECUTE FIXES (priority order)
+STEP 3: FIXES (priority order)
   P0: Broken links, missing pages, external links that should be internal
   P1: Layout/structure mismatches, wrong components
   P2: Content depth (missing sections)
-  P3: Visual polish (images, icons, spacing)
+  P3: Visual polish (images, spacing, icons)
 
-STEP 4: VERIFY → REFLECT → ACT (same loop, same gates)
-  No shortcuts. Fix-forward runs ALL exit criteria.
+STEP 4: VERIFY → REFLECT → ACT (same loop, same gates, no shortcuts)
 ```
 
 ---
@@ -493,34 +373,33 @@ HARD GATES (any fail = not done):
   □ Zero broken internal links
   □ Zero links to original product domains (self-contained)
   □ Every nav item navigates correctly
-  □ Dashboard sidebar: every item → real page (not placeholder)
-  □ Logo and hero images are real downloaded files (not text placeholders)
-  □ Dashboard API gate: every "Submit" button returns real data (not empty, not "coming soon")
+  □ Dashboard: every sidebar item → real page (not placeholder)
+  □ Logo + hero images = real downloaded files
+  □ Every Submit button returns real data (not empty, not "coming soon")
 
-SOFT GATES (target, may have gaps):
-  □ Every <img> = real asset (target: >= 80% of original's image count)
-  □ Content depth: >= 60% of original's sections per page
+SOFT GATES (target, gaps allowed):
+  □ Every <img> = real asset (>= 80% of original's image count)
+  □ Content depth >= 60% of original's sections per page
   □ Every dropdown/tab/form functional
   □ API responses match original format (proxy or mock)
-  □ Responsive at 375px + 768px + 1440px
+  □ Responsive at 375px / 768px / 1440px
   □ Lighthouse >= 90 (all categories)
 
 VERIFICATION RULES:
-  → Use production build (npm run build && npx next start), not dev server
-  → Click every interactive element, don't just screenshot
-  → Report with numbers, not feelings ("52 pages, 0 404s" not "looks good")
-  → NEVER declare done until VERIFY loop exits clean
+  Production build only: npm run build && npx next start (not dev server)
+  Click every interactive element — never screenshot-verify behavior
+  Report with numbers: "52 pages, 0 404s" not "looks good"
+  NEVER declare done until VERIFY loop exits clean
 ```
 
 ---
 
-## DELIVERY — "Ship it"
+## DELIVERY
 
 ```
-After VERIFY passes:
-  git add -A && git commit && git push
-  Verify live Vercel URL loads (3-5 key pages)
-  Report: deployment URL + verification numbers
+git add -A && git commit && git push
+Verify live Vercel URL (3-5 key pages).
+Report: deployment URL + verification numbers.
 ```
 
 ---
@@ -528,78 +407,37 @@ After VERIFY passes:
 ## LAYER 4: REFERENCE — "How do I build this specific thing?"
 
 ```
-Read ON DEMAND during build. Do NOT pre-load.
+Read ON DEMAND during build. Do NOT pre-load all files.
 
 genome/v1/01-first-principles.md    — 8 website primitives, capability audit
 genome/v1/02-design-tokens.md       — colors, typography, spacing, shadows, animations
-genome/v1/03-atomic-elements.md     — 43 UI atoms (button, input, badge, etc.)
+genome/v1/03-atomic-elements.md     — 43 UI atoms (button, input, badge, avatar, etc.)
 genome/v1/04-components.md          — 22 molecules + organisms (navbar, hero, pricing, etc.)
-genome/v1/05-page-templates.md      — 10 layout skeletons (marketing, dashboard, auth, docs, etc.)
+genome/v1/05-page-templates.md      — 10 layout skeletons (marketing, dashboard, auth, docs)
 genome/v1/06-page-types.md          — page catalog by category + sitemap patterns
-genome/v1/07-interactions.md        — click, hover, focus, scroll, form, keyboard patterns
+genome/v1/07-interactions.md        — click, hover, scroll, form, keyboard patterns
 genome/v1/08-state-data.md          — UI state, URL state, server state, database patterns
 genome/v1/09-invisible-layer.md     — SEO, accessibility, performance, security
 genome/v1/10-agent-browsable.md     — data-agent-* attributes, JSON-LD, API mirroring
 genome/v1/11-error-edge-cases.md    — loading, error, empty, offline states
-genome/v1/12-responsive.md          — breakpoint specs, component responsive patterns
+genome/v1/12-responsive.md          — breakpoint specs, responsive component patterns
 genome/v1/13-content-strategy.md    — text, images, icons, video sourcing
-genome/v1/16-validation.md          — 90-point review checklist (for review agent)
+genome/v1/16-validation.md          — 90-point review checklist (for final review)
 genome/v1/17-industry-research.md   — competitive landscape
 genome/v1/18-prd-template.md        — PRD template (copy and fill)
 genome/v1/19-tech-rd-template.md    — Tech RD template (copy and fill)
 genome/v1/VERSION.md                — pinned dependency versions
 
 WHEN TO READ:
-  Building a navbar? → 04-components.md §4.11
-  Choosing a layout? → 05-page-templates.md
-  Wiring form validation? → 07-interactions.md §7.4
-  Adding SEO? → 09-invisible-layer.md §9.1
-  Need the validation checklist? → 16-validation.md
+  Building navbar?         → 04-components.md §4.11
+  Choosing layout?         → 05-page-templates.md
+  Wiring form validation?  → 07-interactions.md §7.4
+  Adding SEO?              → 09-invisible-layer.md §9.1
+  Final review?            → 16-validation.md
+  Verify extraction gates? → verify-extraction.sh (blocks build if specs/ incomplete)
+  Post-build review?       → verifier-prompt.md (fresh agent review prompt)
 ```
 
 ---
 
-## PRINCIPLES
-
-```
-THE CORE TRUTH:
-  Replication quality = extraction quality. Period.
-  If you extract 100% of a page's data, replication is mechanical.
-  If you extract 70%, you guess 30%, and the human catches it every time.
-  Every failure traces to incomplete extraction, not bad code.
-
-1. EXTRACTION IS THE PRODUCT
-   The specs/ folder is what matters, not the code. Code is assembly.
-   Spend 70% of time on extraction, 30% on build.
-   A complete extraction makes build trivial. An incomplete one makes it impossible.
-
-2. 8 DIMENSIONS, ALL REQUIRED
-   Structure + Style + Assets + Content + Behavior + State + Network + Metadata.
-   A page missing ANY dimension is incomplete. Check the 8-box list for every page.
-
-3. RECURSIVE DEPTH
-   For every page: click every clickable element. For every result: repeat.
-   A page with 4 tabs × 3 buttons × 2 forms = 24 paths to capture, not 1.
-   "I visited the page" ≠ "I explored all its states."
-
-4. DASHBOARD FIRST
-   Auth-gated pages are the product. Marketing pages are the wrapper.
-   Extract the dashboard BEFORE marketing pages — it has the most depth.
-
-5. COMPARE BOTH SITES, ALWAYS
-   Never evaluate the replica alone. Open original + replica side by side.
-   For every element: trigger on original → trigger on replica → match?
-
-6. QUALITY SYSTEM, NOT CHECKLIST
-   "I did something" ≠ "I did it completely."
-   Agents optimize for gate-passing, not quality. Fight this instinct.
-   For each step: is the artifact COMPLETE across all 8 dimensions?
-
-7. VERIFY WITH PRODUCTION BUILD
-   npm run build && npx next start. Dev server is unreliable.
-   Click every interactive element. Report with numbers, not feelings.
-```
-
----
-
-<!-- Genome OS v2.1 | Created: 2026-04-01 | Validated: iploop.io | Old genome: genome/v1/ -->
+<!-- Genome OS v2.2 | 2026-04-14 | Validated: novada.com, iploop.io -->

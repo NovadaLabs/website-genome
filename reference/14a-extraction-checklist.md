@@ -2,18 +2,24 @@
 
 > Scan this before ANY extraction or fix-forward work. Each item takes <1 min.
 > Full details: 14-extraction-sop.md §[section number]
-> PRIMARY TOOL: bb-browser (user's real Chrome with login sessions)
-> BACKUP TOOLS: Chrome CDP pipeline → Chrome DevTools MCP → Playwright headless
+> PRIMARY TOOL: existing-chrome (user's real Chrome with login sessions, via CDP)
+> BACKUP TOOLS: opencli (named-site adapters) → Chrome DevTools MCP → Playwright headless
+>
+> [FIXED 2026-10-14] Every `bb-browser <verb>` line below is HISTORICAL shorthand —
+> bb-browser itself is dead (Chrome 136+ CDP lockdown). Translate to
+> `python3 ~/.claude/skills/existing-chrome/scripts/cdp.py eval <match> "<equivalent JS>"`
+> — see 14-extraction-sop.md Method 1 for the full command-equivalence table.
 
 ## CONNECT + DASHBOARD FIRST (§0) — DO THIS BEFORE ANYTHING ELSE
 
 ```checklist
-[ ] bb-browser open <target-url> — does it open in user's Chrome?
-    → If bb-browser not working: fallback to CDP (human runs: cd ~/Projects/agent-chrome-bridge && npm run launch-chrome)
+[ ] existing-chrome: cdp.py tabs, then eval <match> "location.href='<target-url>'" — does it open in user's Chrome?
+    → If existing-chrome not connected: start the daemon (see SKILL.md Human Setup), or
+      fall back to opencli for named-site actions. bb-browser / agent-chrome-bridge are dead, do not use.
 [ ] Navigate to target site's LOGIN page — is human's session active?
-[ ] If auth-gated pages exist: bb-browser open <dashboard-url> RIGHT NOW
+[ ] If auth-gated pages exist: existing-chrome open <dashboard-url> RIGHT NOW
     → Can you see logged-in content? If yes, capture FULL structure immediately
-    → bb-browser snapshot -i → click every @ref sidebar item → capture each
+    → cdp.py eval <match> "<JS to list sidebar links>" → click each (via JS) → capture each
     → This is Step 0, not Step 10. THREE agents skipped this. Don't be the fourth.
 [ ] If session expired: tell human to re-login in their Chrome
 ```

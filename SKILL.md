@@ -13,7 +13,7 @@ metadata:
     - "create-next-app"
     - "npx shadcn"
     - "site-crawler"
-    - "bb-browser"
+    - "existing-chrome"
     - "npm run dev"
     - "npm run build"
     - "next start"
@@ -48,13 +48,13 @@ FIX mode:   I have a replica to improve  → read GENOME.md §FIX
 2. Before Step 3 (EXTRACT), read `vocabulary.md` — it tells you what interaction patterns to detect on the target site.
 3. During BUILD, pull `reference/` files on demand for specific component patterns.
 
-## Human Setup (the ONLY manual step)
+## Human Setup (the ONLY manual step — auth-gated sites only)
 
-```bash
-cd ~/Projects/novada-replicate && npm run launch-chrome
-```
+The `existing-chrome` skill drives your REAL, already-logged-in Chrome via CDP — no
+relaunch needed. First use in a session: Chrome will show an "Allow remote debugging"
+prompt — click Allow. Everything after that is autonomous.
 
-This launches Chrome with the user's login sessions. Everything after this is autonomous.
+(Public-only sites skip this entirely — site-crawler + Playwright need no browser login.)
 
 ## 10 Principles (burned into this OS from 4 site replications)
 

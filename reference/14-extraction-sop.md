@@ -35,52 +35,49 @@ Screenshots are the VERIFICATION step, not the CAPTURE step.
 ## EXTRACTION METHODS (priority order)
 
 ```spec
-METHOD 1: BB-BROWSER (recommended — uses user's real Chrome with login)
+METHOD 1: EXISTING-CHROME (recommended — uses user's real Chrome with login)
+  [FIXED 2026-10-14 — this method replaces the old "bb-browser" entry. bb-browser
+  itself, and the "Chrome CDP pipeline" that used to be Method 2 below, both broke
+  when Chrome 136+ started blocking --remote-debugging-port on the default profile
+  outright — no cookie-copy workaround restores it. existing-chrome works differently:
+  it reads DevToolsActivePort from the user's Chrome as it already is, no relaunch.]
+
   HOW: Runs in user's real Chrome browser, reuses all logged-in sessions
-  SKILL: bb-browser (already installed at ~/.claude/skills/bb-browser/)
+  SKILL: existing-chrome (already installed at ~/.claude/skills/existing-chrome/)
   AUTH: User's Chrome has all login sessions — no re-login, no cookie copying
   VISIBILITY: User can SEE the agent operating in their Chrome (not hidden)
 
-  KEY COMMANDS:
-    bb-browser open <url>                    # open in user's Chrome (new tab)
-    bb-browser snapshot -i                   # structured element tree (interactive)
-    bb-browser snapshot --json               # machine-parseable JSON structure
-    bb-browser eval "document.querySelector('nav').outerHTML"   # extract exact HTML
-    bb-browser eval "getComputedStyle(document.body).backgroundColor"  # CSS values
-    bb-browser click @5                      # click element by ref
-    bb-browser hover @3                      # hover for dropdowns
-    bb-browser screenshot                    # visual capture (for human QA only)
-    bb-browser close                         # close tab when done
+  KEY COMMANDS (S=~/.claude/skills/existing-chrome/scripts):
+    python3 $S/cdp.py tabs                                    # list open tabs → find yours by URL match
+    python3 $S/cdp.py eval <match> "location.href='<url>'"    # navigate (open/go to a URL)
+    python3 $S/cdp.py eval <match> "document.documentElement.outerHTML"   # extract exact HTML
+    python3 $S/cdp.py eval <match> "getComputedStyle(document.body).backgroundColor"  # CSS values
+    python3 $S/cdp.py eval <match> "document.querySelector('.btn').click()"  # click (no @ref system — target via JS selector)
+    python3 $S/cdp.py eval <match> "document.querySelector('.menu').dispatchEvent(new MouseEvent('mouseover',{bubbles:true}))"  # hover for dropdowns
+    python3 $S/cdp.py shot <match> out.png                    # visual capture (for human QA only)
+    python3 $S/cdp.py wait <match> 5                          # wait for page settle
+
+  Note: existing-chrome has no built-in @ref snapshot/click system like the old
+  bb-browser did — everything goes through `eval` with a JS selector/expression.
+  This is more verbose per-action but equally capable (any click/hover/fill bb-browser
+  could do, a JS one-liner via `eval` can also do).
 
   EXTRACTION WORKFLOW:
-    1. bb-browser open <url>                            → navigate
-    2. bb-browser snapshot -i                           → get element tree
-    3. bb-browser eval "document.documentElement.outerHTML"  → get full HTML
-    4. bb-browser eval "<css extraction script>"        → get design tokens
-    5. bb-browser click @ref / hover @ref               → interact with elements
-    6. bb-browser snapshot -i                           → capture changed state
-    7. bb-browser close                                 → clean up
+    1. cdp.py eval <match> "location.href='<url>'"              → navigate
+    2. cdp.py eval <match> "document.documentElement.outerHTML" → get full HTML
+    3. cdp.py eval <match> "<css extraction script>"            → get design tokens
+    4. cdp.py eval <match> "<click/hover JS>"                    → interact with elements
+    5. cdp.py eval <match> "document.documentElement.outerHTML" → capture changed state
+    6. (no explicit close needed — the daemon holds one shared connection)
 
   BEST FOR: ALL extraction tasks. Public and auth-gated. Interactive capture.
   WHY PRIMARY: User's real Chrome → all login sessions → visible to user → structured output
 
-METHOD 2: CHROME CDP PIPELINE (backup — when bb-browser unavailable)
-  HOW: Copies cookies from human's real Chrome profile to a temp dir, launches via CDP
-  CODE: ~/Projects/agent-chrome-bridge/tools/chrome-cdp.ts
-  AUTH: Uses human's existing Chrome login sessions (no re-login needed)
-
-  SETUP:
-    cd ~/Projects/agent-chrome-bridge
-    npm run launch-chrome     # launches Chrome with copied cookies on port 9222
-    # Then in agent code:
-    const browser = await pw.chromium.connectOverCDP('http://127.0.0.1:9222')
-
-  ⚠️ CHROME 146+ CONSTRAINT:
-    Chrome 146+ blocks --remote-debugging-port on the default profile directory.
-    The CDP pipeline works around this by copying cookies to a temp directory.
-
-  BEST FOR: Programmatic batch extraction (many pages in one script), when bb-browser
-    has issues, or when you need Playwright API for complex automation.
+METHOD 2: OPENCLI (fallback — named-site adapters only)
+  HOW: Browser extension + daemon, independent of the CDP debug-port lockdown
+  USE: Site-specific actions existing-chrome has no generic path for (e.g. posting to
+    X/Twitter, not just reading a page) — `opencli twitter post ...`, `opencli doctor --live`
+  LIMITATION: Only covers sites with a built adapter, not general-purpose extraction.
 
 METHOD 3: CHROME DEVTOOLS MCP (backup — separate profile)
   HOW: Connects to a Chrome instance with its own persistent profile
@@ -88,9 +85,12 @@ METHOD 3: CHROME DEVTOOLS MCP (backup — separate profile)
   AUTH: Human logs into target site ONCE in the yellow-border Chrome → remembered
   TOOLS: take_snapshot, take_screenshot, evaluate_script, navigate_page
 
-  BEST FOR: Quick checks when bb-browser and CDP are not set up.
+  BEST FOR: Quick checks when existing-chrome is not set up, AND responsive QA on
+    your OWN BUILT REPLICA's localhost dev server (no real login needed there, so a
+    separate managed profile is fine — see Method 5 below).
   LIMITATION: Opens a SEPARATE Chrome window — user may not see it.
-    Login sessions are separate from user's main Chrome.
+    Login sessions are separate from user's main Chrome — do not use for
+    auth-gated EXTRACTION of the ORIGINAL site, only for the replica.
 
 METHOD 4: PLAYWRIGHT HEADLESS (backup — public pages only)
   HOW: Headless browser, no login state
@@ -98,18 +98,21 @@ METHOD 4: PLAYWRIGHT HEADLESS (backup — public pages only)
   BEST FOR: Public pages where no auth is needed, batch screenshot comparison
   LIMITATION: Cannot access auth-gated pages
 
-METHOD 5: GSTACK (backup — QA and responsive testing)
-  SKILL: gstack (already installed at ~/.claude/skills/gstack/)
-  HOW: Headless browser for QA testing, responsive layout checks, diff before/after
+METHOD 5: CHROME DEVTOOLS MCP RESIZE (responsive QA — replaces "gstack")
+  [FIXED 2026-10-14 — gstack was referenced here but was never actually installed;
+  no evidence it ever existed as a real skill on this machine.]
+  HOW: mcp__chrome-devtools__resize_page(width, height) + take_screenshot, against
+    the BUILT REPLICA's own localhost dev server (not the original site — no auth
+    needed, so chrome-devtools MCP's own managed profile is the right tool here).
   BEST FOR: Verification phase — testing replica at 375px, 768px, 1440px
 
 METHOD DECISION:
-  Auth-gated pages         → Method 1 (bb-browser) — always first choice
-  Public pages             → Method 1 (bb-browser) or Method 4 (Playwright)
-  Batch extraction (50+)   → Method 2 (CDP pipeline with script)
-  Quick spot check         → Method 3 (Chrome DevTools MCP)
-  Responsive QA            → Method 5 (gstack)
-  If bb-browser fails      → Method 2 (CDP) → Method 3 (DevTools MCP) → Method 4 (Playwright)
+  Auth-gated pages (ORIGINAL site) → Method 1 (existing-chrome) — always first choice
+  Public pages                     → Method 1 (existing-chrome) or Method 4 (Playwright)
+  Named-site specific action       → Method 2 (opencli)
+  Quick spot check / replica QA    → Method 3 (Chrome DevTools MCP)
+  Responsive QA (on the replica)   → Method 5 (Chrome DevTools MCP resize)
+  If existing-chrome fails         → Method 3 (DevTools MCP) → Method 4 (Playwright)
 ```
 
 ---
@@ -659,8 +662,23 @@ TARGET: >= 90% of pages scoring PASS, remaining at WARN, zero FAIL.
 
 ## EXTRACTION TOOL COMMANDS
 
-```spec
-BB-BROWSER (PRIMARY — user's real Chrome with login):
+> ⚠️ **[FIXED 2026-10-14] The `bb-browser` command block below is HISTORICAL —**
+> **bb-browser itself is dead (Chrome 136+ CDP lockdown, see Method 1 above).**
+> It is kept here, unedited, as a reference for the SEMANTICS each line was going
+> for (what to extract, in what order) — not as literally-runnable commands.
+> Translate each one to `existing-chrome`'s actual interface:
+>   - `bb-browser open <url>`         → `cdp.py eval <match> "location.href='<url>'"`
+>   - `bb-browser eval "<js>"`        → `cdp.py eval <match> "<js>"` (same JS, same idea)
+>   - `bb-browser click @N` / `hover @N` → no @ref system; target via JS selector instead,
+>     e.g. `cdp.py eval <match> "document.querySelector('<selector>').click()"`
+>   - `bb-browser snapshot -i`        → no direct equivalent; use `eval` to query the DOM
+>     for what you need (e.g. list all `<a>`/`<button>` elements and their text/selectors)
+>   - `bb-browser screenshot`        → `cdp.py shot <match> out.png`
+>   - `bb-browser fill @N "text"`    → `cdp.py eval <match> "document.querySelector('<selector>').value='text'"`
+>   - `bb-browser close` / `tab list` / `frame` → no equivalent needed; the existing-chrome
+>     daemon holds one shared connection, and `cdp.py tabs` lists tabs directly.
+
+BB-BROWSER (HISTORICAL — see translation note above):
   bb-browser open <url>                  → open in user's Chrome (new tab, visible)
   bb-browser open <url> --tab current    → open in current tab (no new tab)
   bb-browser snapshot -i                 → interactive element tree (@ref for clicking)

@@ -1,0 +1,18 @@
+{"time":"2026-04-03T10:00:01Z","step":"connect","action":"existing-chrome cdp.py eval location.href=","url":"https://example.com","result":"loaded","note":"existing-chrome daemon connected via CDP"}
+{"time":"2026-04-03T10:00:05Z","step":"discover","action":"navigate_sidebar","url":"/dashboard","result":"found 11 sidebar items","items":["overview","residential-proxies","scraper-api","browser-api","rotating-isp","rotating-dc","static-isp","dedicated-dc","mobile","wallet","billing"]}
+{"time":"2026-04-03T10:00:12Z","step":"discover","action":"site-crawler","url":"https://example.com","result":"crawled 45 public pages","output":"specs/public/"}
+{"time":"2026-04-03T10:00:15Z","step":"discover","action":"write_sitemap","file":"specs/sitemap.json","page_count":56}
+{"time":"2026-04-03T10:01:00Z","step":"extract","page":"/dashboard/scraper-api","dim":"structure","action":"eval outerHTML","file":"specs/html/dashboard-scraper-api.html","size_bytes":48230}
+{"time":"2026-04-03T10:01:05Z","step":"extract","page":"/dashboard/scraper-api","dim":"style","action":"getComputedStyle","file":"specs/css/dashboard-scraper-api.css"}
+{"time":"2026-04-03T10:01:10Z","step":"extract","page":"/dashboard/scraper-api","dim":"behavior","action":"find_tabs","count":5,"labels":["Playground","Analytics","Users","Pricing","Documentation"]}
+{"time":"2026-04-03T10:01:15Z","step":"extract","page":"/dashboard/scraper-api","dim":"state","action":"click_tab","tab":"Playground","screenshot":"specs/states/dashboard-scraper-api/tab-playground.png","html":"specs/states/dashboard-scraper-api/tab-playground.html"}
+{"time":"2026-04-03T10:01:20Z","step":"extract","page":"/dashboard/scraper-api","dim":"state","action":"click_tab","tab":"Analytics","screenshot":"specs/states/dashboard-scraper-api/tab-analytics.png","html":"specs/states/dashboard-scraper-api/tab-analytics.html"}
+{"time":"2026-04-03T10:01:25Z","step":"extract","page":"/dashboard/scraper-api","dim":"state","action":"click_tab","tab":"Users","screenshot":"specs/states/dashboard-scraper-api/tab-users.png"}
+{"time":"2026-04-03T10:01:30Z","step":"extract","page":"/dashboard/scraper-api","dim":"state","action":"click_tab","tab":"Pricing","screenshot":"specs/states/dashboard-scraper-api/tab-pricing.png"}
+{"time":"2026-04-03T10:01:35Z","step":"extract","page":"/dashboard/scraper-api","dim":"state","action":"click_tab","tab":"Documentation","screenshot":"specs/states/dashboard-scraper-api/tab-documentation.png"}
+{"time":"2026-04-03T10:01:40Z","step":"extract","page":"/dashboard/scraper-api","dim":"network","action":"intercept_api","trigger":"Submit Request button","endpoint":"POST /api/v1/scrape","request":{"url":"...","engine":"google"},"response_status":200,"file":"specs/apis.json"}
+{"time":"2026-04-03T10:01:45Z","step":"extract","page":"/dashboard/scraper-api","dim":"assets","action":"download_images","count":3,"files":["specs/assets/images/scraper-icon.svg","specs/assets/images/scraper-hero.png","specs/assets/images/scraper-docs-banner.png"]}
+{"time":"2026-04-03T10:01:50Z","step":"extract","page":"/dashboard/scraper-api","dim":"metadata","action":"extract_meta","file":"specs/metadata/dashboard-scraper-api.json"}
+{"time":"2026-04-03T10:01:55Z","step":"extract","page":"/dashboard/scraper-api","dim":"content","action":"save_markdown","file":"specs/content/dashboard-scraper-api.md"}
+{"time":"2026-04-03T10:02:00Z","step":"extract","page":"/dashboard/scraper-api","action":"completeness_check","dims_complete":8,"dims_total":8,"result":"COMPLETE"}
+{"time":"2026-04-03T10:15:00Z","step":"verify-extraction","action":"run verify-extraction.sh","failures":0,"warnings":2,"result":"PASSED"}

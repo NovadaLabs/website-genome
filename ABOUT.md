@@ -81,7 +81,7 @@ STEP 1: Connect + detect
 
 STEP 2: Discover all pages
   site-crawler maps every public URL automatically.
-  bb-browser navigates every auth-gated page via your Chrome session.
+  existing-chrome navigates every auth-gated page via your Chrome session.
   Output: specs/sitemap.json — the complete route map.
 
 STEP 3: Extract — 8 dimensions per page
@@ -213,7 +213,7 @@ Genome 已在三个生产环境网站上得到验证：
 
 第 2 步：发现所有页面
   site-crawler 自动爬取所有公开 URL。
-  bb-browser 通过你的 Chrome session 导航到所有需要登录的页面。
+  existing-chrome 通过你的 Chrome session 导航到所有需要登录的页面。
   输出：specs/sitemap.json — 完整路由地图。
 
 第 3 步：提取 — 每个页面 8 个维度

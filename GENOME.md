@@ -1,4 +1,4 @@
-# Website Genome OS v2.2
+# Website Genome OS v2.3
 
 > Single-file agent OS. Every line burned in from a real failure.
 > This is a QUALITY SYSTEM, not a checklist. "I did something" ≠ "I did it completely."
@@ -16,16 +16,27 @@ FIRST QUESTION: Does the target site have auth-gated pages (dashboard, settings,
 
   YES → Chrome is required. Do not skip this.
 
-CHROME SETUP (auth-gated sites only — one command per session):
-  Human runs: cd ~/Projects/agent-chrome-bridge && npm run launch-chrome
-  What this does: copies your login sessions → relaunches Chrome on port 9222.
+CHROME SETUP (auth-gated sites only):
+  PRIMARY: the `existing-chrome` skill — drives the human's REAL, already-logged-in
+  Chrome via CDP (reads DevToolsActivePort directly, no relaunch needed).
+    S=~/.claude/skills/existing-chrome/scripts
+    IF no daemon running: nohup python3 $S/cdp_daemon.py > /tmp/existing-chrome.log 2>&1 &
+      → Chrome will prompt "Allow remote debugging" — tell the human to click Allow.
+      → wait until /tmp/existing-chrome.log contains READY (poll every 2s, up to 15 min)
+    Agent verifies: python3 $S/cdp.py tabs — does it list real tabs?
+    → YES → proceed to LAYER 0
+    → NO  → log has 'HTTP 403' or timeout → ask human to enable
+             chrome://inspect/#remote-debugging → retry once → still failing → STOP, report to human.
 
-  Agent verifies: bb-browser open <any-url> — does it connect?
-  → YES → proceed to LAYER 0
-  → NO  → STOP. Tell human: "Please run: cd ~/Projects/agent-chrome-bridge && npm run launch-chrome"
-           Do not proceed until confirmed.
+  FALLBACK (named-site adapters — X/Twitter, LinkedIn, Bilibili, etc.): `opencli`.
+    Verify with: opencli doctor --live (want: Daemon OK + Extension connected).
 
-  RULE: bb-browser = your Chrome's login sessions. No alternative for auth-gated pages.
+  DEAD, DO NOT USE: `bb-browser` / `agent-chrome-bridge` (npm run launch-chrome).
+    Chrome 136+ blocks the classic --remote-debugging-port CDP endpoint on the
+    default profile (HTTP 404/connection-refused) — this broke silently after
+    v2.2 shipped. If an agent ever suggests this path, it is reading stale
+    instructions; redirect it to `existing-chrome` above.
+
   RULE: Each agent opens its OWN TAB. Never share tabs between agents.
 ```
 
@@ -61,12 +72,19 @@ EXTRACTION DECISION TREE:
   Public pages only?
   ├── YES → site-crawler + Playwright (no Chrome needed)
   └── NO (has auth-gated pages)
-       ├── bb-browser connected? → bb-browser (primary)
-       └── bb-browser down?     → CDP via agent-chrome-bridge
+       ├── existing-chrome connected? → existing-chrome (primary)
+       └── named-site adapter exists? → opencli (fallback, X/LinkedIn/Bilibili/etc.)
 
 TOOL REFERENCE:
-  bb-browser      open <url> | snapshot -i | eval "js" | click @ref | hover @ref | close
-                  Best for: dropdowns, tabs, modals, auth-gated pages, component capture
+  existing-chrome  Skill. `python3 ~/.claude/skills/existing-chrome/scripts/cdp.py` —
+                  tabs | eval <match> "js" | shot <match> out.png | wait <match> <sec>
+                  Best for: dropdowns, tabs, modals, auth-gated pages, component capture.
+                  Drives the human's REAL logged-in Chrome via CDP (reads
+                  DevToolsActivePort directly — no relaunch, no separate profile).
+
+  opencli         Named-site adapters only (opencli twitter/linkedin/bilibili/...).
+                  `opencli doctor --live` to verify. Use when existing-chrome has no
+                  generic path for a site-specific action (e.g. posting, not just reading).
 
   site-crawler    site-crawler <url> --output specs/ --max-pages 200
                   Best for: crawl 100+ pages, download all assets, generate manifest
@@ -75,18 +93,20 @@ TOOL REFERENCE:
 
   Playwright      Headless. Public pages only. No login state.
 
-  CDP (agent-chrome-bridge)  npm run launch-chrome → Chrome on port 9222
-                          Backup when bb-browser can't connect.
-
-  gstack          Responsive QA at 375 / 768 / 1440px
+  Responsive QA   chrome-devtools MCP: resize_page(375/768/1440) + take_screenshot,
+                  on the BUILT REPLICA's localhost dev server (no auth needed, so this
+                  tool's own managed browser profile is fine — it does not need the
+                  human's real cookies the way auth-gated EXTRACTION does).
 
 RULES:
   AI needs HTML + a11y tree + CSS. NOT screenshots.
-  Auth-gated pages → always bb-browser (user's Chrome). Never a fresh browser instance.
+  Auth-gated pages → always existing-chrome (user's real Chrome, real cookies).
+                     Never a fresh/managed browser instance for extraction.
   Screenshots = human QA only. Never a primary extraction artifact.
+  DEAD, DO NOT USE: bb-browser, agent-chrome-bridge, gstack — see STEP 0 note above.
 
 BUILD STACK: Next.js 16 + shadcn/ui + Tailwind 4 + Geist + Vercel
-  Pinned versions: genome/v1/VERSION.md
+  Pinned versions: reference/VERSION.md
 
 SUB-AGENT RULE: Send 1 canary agent first. Verify it completes. Then dispatch rest in batches of 2-3.
   If agents fail: fall back to sequential. Don't block on broken parallelism.
@@ -98,15 +118,19 @@ SUB-AGENT RULE: Send 1 canary agent first. Verify it completes. Then dispatch re
 
 ```
 STEP 1: CONNECT
-  bb-browser open <target-url>
+  existing-chrome: python3 ~/.claude/skills/existing-chrome/scripts/cdp.py eval <match> "location.href='<target-url>'; 'ok'"
   Gate: Can you see auth-gated pages?
   → NO → ask human to log in → retry
 
 STEP 1.5: DETECT TECH STACK
   Before extraction, identify what the target site uses.
-  Builder uses SAME stack as original — wrong tech stack = different behavior.
+  Default: builder uses SAME stack as original — wrong tech stack = different behavior.
+  MIGRATION OVERRIDE: if the human explicitly asked for a stack swap (e.g. "rebuild our
+  Vue site in Next.js"), detecting the original stack is still required — it tells you
+  which patterns/behaviors to replicate — but Step 4 BUILD then targets the REQUESTED
+  stack, not the detected one. Record both in specs/tech-stack.json (`detected` vs `target`).
 
-  bb-browser eval + page source inspection:
+  existing-chrome: python3 .../cdp.py eval <match> "..." + page source inspection:
   Framework:  □ __NEXT_DATA__ → Next.js  □ ng-version → Angular  □ data-v- → Vue
   CSS:        □ flex bg-* text-* → Tailwind  □ col-md-* btn-* → Bootstrap
   Auth:       □ clerk.js → Clerk  □ next-auth cookies → NextAuth  □ auth0.js → Auth0  □ supabase-auth → Supabase
@@ -119,7 +143,7 @@ STEP 1.5: DETECT TECH STACK
 
 STEP 2: DISCOVER ALL PAGES
   site-crawler <url> --output specs/public --max-pages 200   ← public pages
-  bb-browser: navigate sidebar, click every link, collect paths  ← auth-gated pages
+  existing-chrome: navigate sidebar, click every link (cdp.py eval + click via JS), collect paths  ← auth-gated pages
   Classify: INTERNAL (replicate) / EXTERNAL (keep as-is)
   DASHBOARD FIRST — auth-gated pages are the product. Marketing pages are the wrapper.
   Output: specs/sitemap.json
@@ -210,7 +234,7 @@ STEP 4: BUILD
     Agents ONLY write files. Orchestrator ONLY runs npm run build.
     Never both. An orchestrator that also executes always cuts corners.
 
-  Reference on demand: 04-components.md | 05-page-templates.md | 02-design-tokens.md
+  Reference on demand: reference/04-components.md | reference/05-page-templates.md | reference/02-design-tokens.md
   Gate: npm run build && bash ~/.claude/skills/website-genome/verify-build.sh . <original-domain>
         → Exit 0: proceed to Step 5
         → Exit 1: fix what it reports before continuing
@@ -268,8 +292,8 @@ STEP 1: READ CHECKLIST
   Extract: brand, type, features, pages, auth, database needs
 
 STEP 2: GENERATE SPECS
-  specs/prd.md      → template: genome/v1/18-prd-template.md
-  specs/tech-rd.md  → template: genome/v1/19-tech-rd-template.md
+  specs/prd.md      → template: reference/18-prd-template.md
+  specs/tech-rd.md  → template: reference/19-tech-rd-template.md
   Gate: wc -l specs/prd.md specs/tech-rd.md  → both must be > 20 lines
 
 STEP 3: SCAFFOLD
@@ -277,7 +301,7 @@ STEP 3: SCAFFOLD
   npx shadcn@2 init -d
   npm install geist lucide-react
   + conditional deps from PRD (auth → @clerk/nextjs, db → drizzle-orm, etc.)
-  Check genome/v1/VERSION.md for pinned versions before installing.
+  Check reference/VERSION.md for pinned versions before installing.
   Wire verify-build.sh as prebuild hook (blocks npm run build on broken builds):
   npm pkg set scripts.prebuild="bash ~/.claude/skills/website-genome/verify-build.sh ."
   git init && git add -A && git commit -m "chore: scaffold"
@@ -286,44 +310,45 @@ STEP 3: SCAFFOLD
 STEP 4: BUILD (each phase: Read ref → Do → Gate → Commit)
 
   Phase A: Design tokens + layouts
-    Read: 02-design-tokens.md, 05-page-templates.md
+    Read: reference/02-design-tokens.md, reference/05-page-templates.md
     Do:   globals.css tokens, root layout, marketing/dashboard/auth layouts
     Gate: npm run dev 2>&1 | grep -i "error\|failed" | head -5  → must be empty
     Commit: "feat: scaffold + design tokens + layouts"
 
   Phase B: Public pages
-    Read: 04-components.md, 06-page-types.md, 13-content-strategy.md
+    Read: reference/04-components.md, reference/06-page-types.md, reference/13-content-strategy.md
     Do:   landing, features, pricing, about, blog, docs, legal
     Gate: npm run build && bash ~/.claude/skills/website-genome/verify-build.sh .
           → check: zero broken links in public routes
     Commit: "feat: public pages"
 
   Phase C: Auth (skip if no auth)
-    Read: 08-state-data.md §auth
+    Read: reference/08-state-data.md §auth
     Do:   Clerk setup, proxy.ts, sign-in/up pages, ClerkProvider
-    Gate: bb-browser open http://localhost:3000/sign-up → complete flow manually → confirm redirect to dashboard
+    Gate: existing-chrome: cdp.py eval <match> "location.href='http://localhost:3000/sign-up'"
+          → complete flow manually → confirm redirect to dashboard
     Commit: "feat: auth"
 
   Phase D: Dashboard (skip if no dashboard)
-    Read: 06-page-types.md §dashboard
+    Read: reference/06-page-types.md §dashboard
     Do:   overview, resource CRUD, settings, admin
     Gate: bash ~/.claude/skills/website-genome/verify-build.sh . → check dashboard routes all return 200
     Commit: "feat: dashboard"
 
   Phase E: Data layer (skip if no database)
-    Read: 08-state-data.md §database
+    Read: reference/08-state-data.md §database
     Do:   schema, migrations, server actions, wire forms
-    Gate: bb-browser create → read → update → delete one record → confirm in db
+    Gate: existing-chrome: create → read → update → delete one record via the UI → confirm in db
     Commit: "feat: database"
 
   Phase F: Interactions + state
-    Read: 07-interactions.md
+    Read: reference/07-interactions.md
     Do:   button handlers, form submissions, modals, filters, loading states
-    Gate: bb-browser: click every button/dropdown/form on 3 representative pages → confirm responses
+    Gate: existing-chrome: click every button/dropdown/form on 3 representative pages → confirm responses
     Commit: "feat: interactions"
 
   Phase G: Invisible layer + polish
-    Read: 09-invisible-layer.md, 10-agent-browsable.md, 11-error-edge-cases.md, 12-responsive.md
+    Read: reference/09-invisible-layer.md, reference/10-agent-browsable.md, reference/11-error-edge-cases.md, reference/12-responsive.md
     Do:   metadata per page, sitemap.ts, robots.ts, JSON-LD, a11y, CSP, rate limiting,
           loading.tsx + error.tsx + not-found.tsx, responsive at 375/768/1440px
     Gate: npx next start & sleep 3 && npx lighthouse http://localhost:3000 --output json --quiet \
@@ -334,7 +359,7 @@ STEP 4: BUILD (each phase: Read ref → Do → Gate → Commit)
   GATE FAILURE RULE: Fix before next phase. Blocked after 2 attempts → report to human.
 
 STEP 5: VERIFY → REFLECT → ACT (same loop as §COPY Step 5)
-  Use genome/v1/16-validation.md (90-point review). Target: >= 90% to ship.
+  Use reference/16-validation.md (90-point review). Target: >= 90% to ship.
 ```
 
 ---
@@ -344,7 +369,7 @@ STEP 5: VERIFY → REFLECT → ACT (same loop as §COPY Step 5)
 ```
 STEP 0: DASHBOARD FIRST (no exceptions)
   Before reading any handoff, before writing any code:
-  → bb-browser open <dashboard-url> → capture full sidebar structure.
+  → existing-chrome: open <dashboard-url> → capture full sidebar structure.
   This is Step 0 because "dashboard first" is the #1 persistent failure pattern.
 
 STEP 1: READ HANDOFF
@@ -409,24 +434,24 @@ Report: deployment URL + verification numbers.
 ```
 Read ON DEMAND during build. Do NOT pre-load all files.
 
-genome/v1/01-first-principles.md    — 8 website primitives, capability audit
-genome/v1/02-design-tokens.md       — colors, typography, spacing, shadows, animations
-genome/v1/03-atomic-elements.md     — 43 UI atoms (button, input, badge, avatar, etc.)
-genome/v1/04-components.md          — 22 molecules + organisms (navbar, hero, pricing, etc.)
-genome/v1/05-page-templates.md      — 10 layout skeletons (marketing, dashboard, auth, docs)
-genome/v1/06-page-types.md          — page catalog by category + sitemap patterns
-genome/v1/07-interactions.md        — click, hover, scroll, form, keyboard patterns
-genome/v1/08-state-data.md          — UI state, URL state, server state, database patterns
-genome/v1/09-invisible-layer.md     — SEO, accessibility, performance, security
-genome/v1/10-agent-browsable.md     — data-agent-* attributes, JSON-LD, API mirroring
-genome/v1/11-error-edge-cases.md    — loading, error, empty, offline states
-genome/v1/12-responsive.md          — breakpoint specs, responsive component patterns
-genome/v1/13-content-strategy.md    — text, images, icons, video sourcing
-genome/v1/16-validation.md          — 90-point review checklist (for final review)
-genome/v1/17-industry-research.md   — competitive landscape
-genome/v1/18-prd-template.md        — PRD template (copy and fill)
-genome/v1/19-tech-rd-template.md    — Tech RD template (copy and fill)
-genome/v1/VERSION.md                — pinned dependency versions
+reference/01-first-principles.md    — 8 website primitives, capability audit
+reference/02-design-tokens.md       — colors, typography, spacing, shadows, animations
+reference/03-atomic-elements.md     — 43 UI atoms (button, input, badge, avatar, etc.)
+reference/04-components.md          — 22 molecules + organisms (navbar, hero, pricing, etc.)
+reference/05-page-templates.md      — 10 layout skeletons (marketing, dashboard, auth, docs)
+reference/06-page-types.md          — page catalog by category + sitemap patterns
+reference/07-interactions.md        — click, hover, scroll, form, keyboard patterns
+reference/08-state-data.md          — UI state, URL state, server state, database patterns
+reference/09-invisible-layer.md     — SEO, accessibility, performance, security
+reference/10-agent-browsable.md     — data-agent-* attributes, JSON-LD, API mirroring
+reference/11-error-edge-cases.md    — loading, error, empty, offline states
+reference/12-responsive.md          — breakpoint specs, responsive component patterns
+reference/13-content-strategy.md    — text, images, icons, video sourcing
+reference/16-validation.md          — 90-point review checklist (for final review)
+reference/17-industry-research.md   — competitive landscape
+reference/18-prd-template.md        — PRD template (copy and fill)
+reference/19-tech-rd-template.md    — Tech RD template (copy and fill)
+reference/VERSION.md                — pinned dependency versions
 
 WHEN TO READ:
   Building navbar?         → 04-components.md §4.11
@@ -440,4 +465,16 @@ WHEN TO READ:
 
 ---
 
-<!-- Genome OS v2.2 | 2026-04-14 | Validated: novada.com, iploop.io -->
+<!-- Genome OS v2.3 | 2026-10-14 | Validated: novada.com, iploop.io
+     v2.3 changelog: fixed dead `reference/` symlink (was pointing at an archived dir —
+     restored as real files, synced from NovadaLabs/website-genome GitHub); replaced
+     dead Chrome tooling (bb-browser/agent-chrome-bridge broken by Chrome 136+ CDP
+     lockdown, gstack never installed) with existing-chrome (primary) + opencli
+     (named-site fallback) + chrome-devtools MCP (responsive QA on the replica only);
+     added MIGRATION OVERRIDE to §COPY Step 1.5 for intentional stack swaps (e.g.
+     Vue→Next). Superseded the stale "v4.0 compressed" plan in
+     memory/project_genome_v4_plan.md — that compression never actually shipped
+     anywhere (not on GitHub, not in this skill); this file is the real source of truth. -->
+<!-- Previously labeled v2.2 | 2026-04-14 — see GENOME-v3.1-backup.md / GENOME-v3.2-backup.md
+     in this folder for the abandoned parallel version-numbering branch; do not revive
+     that numbering, v2.3 continues the line that was actually pushed to GitHub. -->

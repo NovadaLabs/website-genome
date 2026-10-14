@@ -66,7 +66,7 @@ The agent will check your system, install what's missing, and walk you through t
 | **Git** | Version control | Commits and pushes code | `brew install git` |
 | **GitHub CLI** | `gh` command | Creates repos, manages PRs | `brew install gh` then `gh auth login` |
 | **Google Chrome** | Browser | Agent uses your login sessions for extraction | [chrome.com](https://www.google.com/chrome/) |
-| **Chrome debug launcher** | Script to launch Chrome with CDP port | Lets agents connect to your logged-in Chrome | See setup below |
+| **existing-chrome skill** | CDP bridge to your real Chrome | Lets agents connect to your already-logged-in Chrome, no relaunch | Already in `~/.claude/skills/existing-chrome/` on this machine — see setup below |
 
 ### Nice to Have (enhances quality but not blocking)
 
@@ -76,8 +76,8 @@ The agent will check your system, install what's missing, and walk you through t
 | **Vercel account** | Hosting | Free tier works | [vercel.com/signup](https://vercel.com/signup) |
 | **site-crawler** | Automated extraction | Crawls entire sites in one command | `pip install -e .` from NovadaLabs/site-crawler |
 | **Playwright** | Headless browser | Backup extraction for public pages | `pip install playwright && playwright install chromium` |
-| **bb-browser skill** | Browser automation | Primary extraction tool (agent uses your Chrome) | Copy to `~/.claude/skills/bb-browser/` |
-| **gstack skill** | QA testing | Responsive testing at 375/768/1440px | Copy to `~/.claude/skills/gstack/` |
+| **opencli skill** | Named-site automation | Fallback for site-specific actions (posting, not just reading) | Already in `~/.claude/skills/opencli/` on this machine |
+| **chrome-devtools MCP** | Responsive QA | Resize + screenshot the BUILT REPLICA at 375/768/1440px | Bundled MCP tool, no separate install |
 
 ### Chrome Setup — THE Most Important Step
 
@@ -97,76 +97,57 @@ Most websites have two sides:
 - **Before login**: marketing pages, pricing, docs (anyone can see)
 - **After login**: dashboard, settings, billing, user data (the REAL product)
 
-The agent CANNOT log in by itself. It always opens a fresh browser with zero sessions. The ONLY way to give the agent access to logged-in pages is to share YOUR Chrome profile — with YOUR cookies and sessions — via the CDP (Chrome DevTools Protocol) pipeline.
+The agent CANNOT log in by itself. The ONLY way to give it access to logged-in pages
+is the `existing-chrome` skill, which drives YOUR real, already-open Chrome over CDP.
+
+> **History note (fixed 2026-10-14):** an earlier version of this doc described a
+> "CDP launcher" that closed your Chrome and relaunched it on a debug port with your
+> cookies copied over. That approach broke when Chrome 136+ started blocking direct
+> debug access to the default profile outright — the relaunch-with-copied-cookies
+> trick doesn't restore it. `existing-chrome` works differently (reads
+> `DevToolsActivePort` from your running Chrome, no relaunch) and is what actually
+> works today. If you find an older copy of this skill referencing
+> `agent-chrome-bridge` / `npm run launch-chrome` / `bb-browser`, it's stale — use
+> this version instead.
 
 **How it works:**
 
 ```
-YOUR Chrome (logged in)  →  CDP pipeline copies cookies  →  Debug Chrome (logged in + agent-accessible)
-     ↑                              ↑                              ↑
-  You log in here             One command does this         Agent connects here
+YOUR Chrome (already open, already logged in)  →  existing-chrome reads its CDP port  →  Agent connects
+     ↑                                                      ↑
+  You log in here, normally, once                 No relaunch, no cookie copying
 ```
 
 **Step-by-step:**
 
 ```
-STEP 1: Log into the target website in your NORMAL Chrome
-  → Open Chrome as you normally do
+STEP 1: Log into the target website in your NORMAL Chrome (the one you already have open)
   → Go to the website you want to replicate (e.g. https://brightdata.com)
   → Log in with your account
   → Navigate to the dashboard — confirm you can see your logged-in content
-  → Leave Chrome open (don't close it yet)
+  → Leave Chrome open
 
-STEP 2: Run the CDP launcher (ONE command)
-  → Open your terminal and run:
+STEP 2: Let the agent connect (no manual command needed — the agent does this)
+  → The agent runs the existing-chrome skill's daemon in the background
+  → First time this session: Chrome shows an "Allow remote debugging" popup
+    → Click Allow (you only do this once per Chrome restart, not once per site)
+  → The agent verifies it can see your real tabs before proceeding
 
-    cd ~/Projects/agent-chrome-bridge && npm run launch-chrome
-
-  → What this does:
-    1. Closes your current Chrome
-    2. Copies your cookies and sessions to a temporary profile
-    3. Relaunches Chrome with a debug port (9222) using those cookies
-    4. The new Chrome window has ALL your login sessions
-
-  → This is the bridge between "human is logged in" and "agent can access logged-in pages"
-
-STEP 3: Verify your logins survived
-  → Chrome reopens automatically
-  → Go to the target website's dashboard
-  → Are you still logged in?
-    YES → You're ready. The agent can now see everything you can see.
-    NO  → Log in again in THIS Chrome window. Your session will be available to the agent.
-
-STEP 4: Tell the agent to start
-  → The agent connects to this Chrome on port 9222
-  → It can browse both public pages AND your logged-in dashboard
-  → You can WATCH the agent work in your Chrome in real-time
-  → Each agent opens its own tab — you'll see tabs appearing and pages loading
+STEP 3: Tell the agent to start
+  → It can browse both public pages AND your logged-in dashboard, in YOUR Chrome
+  → You can WATCH it work in real-time — each agent opens its own tab
 ```
 
 **Important notes:**
-- You need to run `npm run launch-chrome` EVERY TIME you start a new replication session (cookies expire)
-- If you need to replicate a site you haven't logged into yet, log in FIRST in normal Chrome, THEN run the launcher
-- The agent never sees your passwords — it only gets the session cookies (same as "remember me" on a website)
-- This works because Chrome 146+ blocks direct debug access to your default profile, so the pipeline copies cookies to a temp profile that allows debug access
-
-**Don't have the CDP launcher?**
-
-```bash
-# First time setup (one-time)
-# agent-chrome-bridge is a separate tool from site-crawler — clone it directly:
-git clone https://github.com/NovadaLabs/agent-chrome-bridge ~/Projects/agent-chrome-bridge
-cd ~/Projects/agent-chrome-bridge && npm install
-
-# Then every time you need it:
-cd ~/Projects/agent-chrome-bridge && npm run launch-chrome
-```
+- No relaunch, no temp profile, no cookie-copying — it reads your Chrome as-is.
+- You only click "Allow remote debugging" once per Chrome restart (the daemon holds
+  one connection open and reuses it — repeated connections would re-trigger the prompt).
+- The agent never sees your passwords — same trust boundary as before (session access,
+  not credentials).
 
 **Only replicating public pages (no login needed)?**
-Skip this entire section. The agent will use headless Playwright for public pages. But you won't get any dashboard or logged-in pages.
-
-**What if you only want to replicate public pages?**
-Skip Steps 1-4. The agent will use headless Playwright for public pages. No Chrome needed. But you won't get dashboard pages.
+Skip this entire section. The agent uses `site-crawler` + headless Playwright for public
+pages — no Chrome, no login, nothing to set up. You won't get dashboard/logged-in pages this way.
 
 ### Account Setup (one-time, human only)
 
@@ -190,16 +171,16 @@ vercel --version          # Optional but recommended
 
 ## How It Works
 
-The genome is a 534-line process document that agents follow step-by-step:
+The genome is a ~480-line process document that agents follow step-by-step:
 
 ```
 LAYER 0: MISSION         → Route to COPY / BUILD / FIX mode
-LAYER 1: TOOLS           → bb-browser, site-crawler, Chrome CDP
+LAYER 1: TOOLS           → existing-chrome, site-crawler, opencli
 §COPY PIPELINE           → CONNECT → CRAWL → EXTRACT → COMPONENTS → HUMAN GATE → BUILD → VERIFY
 §BUILD PIPELINE          → CHECKLIST → SPECS → SCAFFOLD → BUILD (8 phases) → VERIFY
 §FIX PIPELINE            → DASHBOARD FIRST → COMPARE → FIX → VERIFY
 LAYER 3: QUALITY GATES   → Hard gates (must-pass) + soft gates (target)
-LAYER 4: REFERENCE       → 24 deep reference files, read on demand
+LAYER 4: REFERENCE       → 25 deep reference files, read on demand
 ```
 
 The VERIFY step runs a **VERIFY → REFLECT → ACT** loop (max 3 iterations) — the agent self-corrects before presenting results.
@@ -234,15 +215,16 @@ Agent(subagent_type="website-builder", prompt="replicate https://example.com")
 ### Copy Mode — Replicate a website
 
 ```
-# 1. Human launches Chrome with login sessions (the ONLY manual step)
-cd ~/Projects/agent-chrome-bridge && npm run launch-chrome
+# 1. Human: log into the target site in your normal Chrome, leave it open
+#    (the agent connects to it via the existing-chrome skill — click "Allow
+#    remote debugging" if Chrome prompts for it, that's the only manual step)
 
 # 2. Agent takes over
 "Replicate https://example.com — follow the website-genome skill"
 ```
 
 The agent will:
-1. Connect to Chrome via bb-browser
+1. Connect to Chrome via the existing-chrome skill
 2. Crawl every URL on the site
 3. Extract HTML, CSS, screenshots, assets, component structures per page
 4. Present extraction results for approval (complex sites only)
@@ -270,7 +252,7 @@ website-genome/
 ├── SKILL.md          # Skill entry point — auto-triggers, 10 principles
 ├── GENOME.md         # The process (534 lines) — the agent's operating system
 ├── vocabulary.md     # Web pattern vocabulary (60+ patterns) — what to look for
-├── reference/        # 24 deep reference files — read on demand during BUILD
+├── reference/        # 25 deep reference files — read on demand during BUILD
 │   ├── 01-first-principles.md
 │   ├── 02-design-tokens.md
 │   ├── 03-atomic-elements.md     (43 UI atoms)
@@ -331,8 +313,9 @@ Output websites use:
 | Tool | Purpose | Repo |
 |------|---------|------|
 | site-crawler | Automated extraction (HTML, CSS, assets, Markdown per page) | NovadaLabs/site-crawler |
-| bb-browser | Browser automation via user's Chrome (login sessions) | Claude Code skill |
-| gstack | Responsive QA testing at 375/768/1440px | Claude Code skill |
+| existing-chrome | Browser automation via user's real Chrome (CDP, login sessions) | Claude Code skill |
+| opencli | Named-site adapters (X, LinkedIn, Bilibili, etc.) | Claude Code skill |
+| chrome-devtools MCP | Responsive QA (resize + screenshot) on the built replica | Bundled MCP tool |
 
 ## Version History
 
@@ -342,12 +325,13 @@ Output websites use:
 | v2.0 | 400 | — | Single file, 5 layers, 7 principles |
 | v2.1 | 476 | iploop.io | Chrome step 0, human gate, quality system mindset |
 | v2.2 | 534 | brightdata.com | Component extraction, visual comparison, 10 principles |
+| v2.3 | ~480 | — (maintenance pass) | Fixed dead `reference/` symlink + stale Chrome tooling (bb-browser/agent-chrome-bridge/gstack → existing-chrome/opencli/chrome-devtools MCP); added stack-migration override to §COPY |
 
 ## Video Script Outline (for internal recording)
 
 1. **Intro (30s):** What is the genome? One-line pitch.
 2. **Demo: Copy Mode (3-5 min):**
-   - Show Chrome launch command
+   - Show Chrome "Allow remote debugging" prompt (one-time per session)
    - Agent reads GENOME.md
    - Extraction: crawl → specs folder populated
    - Build: pages appearing one by one
